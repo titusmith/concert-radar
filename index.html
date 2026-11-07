@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0F1012">
+<title>Concert Radar</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* One quick-glance list: your cities in priority order, shows by date, why each one is on your radar. */
+:root{
+  --bg:#0F1012; --surface:#1B1C1F; --raised:#26272B; --line:#2F3034; --line-strong:#45464B;
+  --fg:#F2F2F0; --muted:#A3A4A8; --faint:#6B6C71;
+  --pink:#FF4FA3; --pink-ink:#1A0610; --ok:#7BD88F; --warn:#F0B45A; --bad:#FF5A4E;
+  --sans:'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono:'IBM Plex Mono', ui-monospace, 'Roboto Mono', monospace;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:16px;line-height:1.4;-webkit-tap-highlight-color:transparent}
+button,input{font-family:inherit;color:inherit;font-size:inherit}
+button{cursor:pointer}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+[hidden]{display:none!important}
+.wrap{max-width:720px;margin:0 auto;padding:calc(env(safe-area-inset-top,0px) + 12px) 16px calc(env(safe-area-inset-bottom,0px) + 40px)}
+.mono{font-family:var(--mono)}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+
+/* header */
+header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:4px 0 14px}
+h1{margin:0;font-size:26px;font-weight:600;letter-spacing:-.01em;display:flex;align-items:center;gap:10px}
+.mark{width:22px;height:22px;flex:none}
+.ibtn{width:44px;height:44px;flex:none;border-radius:999px;border:1px solid var(--line-strong);background:transparent;display:flex;align-items:center;justify-content:center}
+.ibtn:active{background:var(--surface)}
+.ibtn svg{width:20px;height:20px}
+.ibtn.spin svg{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.status{font-family:var(--mono);font-size:12px;color:var(--muted);margin:2px 0 0;min-height:17px}
+.status .warn{color:var(--warn)}
+
+/* view switch */
+.seg{display:flex;background:var(--surface);border-radius:12px;padding:4px;gap:4px;margin:0 0 6px}
+.seg button{flex:1;min-height:40px;border:none;background:transparent;border-radius:9px;font-size:14px;font-weight:500;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--raised);color:var(--fg)}
+.seg .n{font-family:var(--mono);font-size:12px;margin-left:4px;color:var(--faint)}
+.seg button[aria-pressed="true"] .n{color:var(--muted)}
+.newline{font-size:13px;color:var(--pink);margin:10px 0 0;font-weight:500}
+
+/* city sections */
+section{margin-top:22px}
+.city{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:0 0 8px;border-bottom:1px solid var(--line-strong);position:sticky;top:0;background:var(--bg);z-index:1;padding-top:8px}
+.city h2{margin:0;font-size:18px;font-weight:600}
+.city .count{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.none{padding:14px 0;color:var(--faint);font-size:14px}
+.more{width:100%;min-height:44px;margin-top:6px;border:1px solid var(--line);background:transparent;border-radius:10px;font-size:14px;color:var(--muted)}
+
+/* a show */
+.show{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--line);text-decoration:none;align-items:flex-start}
+.show:active{background:var(--surface)}
+.date{width:52px;flex:none;text-align:center;font-family:var(--mono);line-height:1.15;padding-top:2px}
+.date .m{font-size:11px;color:var(--muted);letter-spacing:.06em}
+.date .d{font-size:24px;font-weight:500}
+.date .w{font-size:11px;color:var(--muted)}
+.body{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.who{font-size:16px;font-weight:600;line-height:1.3}
+.who .also{font-weight:400;color:var(--muted)}
+.who .hit{color:var(--fg)}
+.where{font-size:13px;color:var(--muted)}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}
+.tag{font-family:var(--mono);font-size:11px;padding:3px 8px;border-radius:999px;border:1px solid var(--line-strong);color:var(--muted);white-space:nowrap}
+.tag.strong{border-color:var(--fg);color:var(--fg)}
+.tag.new{background:var(--pink);border-color:var(--pink);color:var(--pink-ink);font-weight:500}
+.tag.sale{border-color:var(--warn);color:var(--warn)}
+.tag.off{border-color:var(--bad);color:var(--bad)}
+.show.dim .who{font-weight:500}
+.show.dim .who,.show.dim .date .d{color:#C9CACD}
+
+/* setup / settings */
+.panel{background:var(--surface);border-radius:14px;padding:18px;margin-top:14px;display:flex;flex-direction:column;gap:12px}
+.panel h2{margin:0;font-size:17px;font-weight:600}
+.panel p{margin:0;font-size:14px;color:var(--muted);line-height:1.5}
+.panel p b{color:var(--fg);font-weight:500}
+label{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:6px}
+input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px solid var(--line-strong);background:var(--bg);padding:0 12px;font-family:var(--mono);font-size:14px;width:100%}
+.copyrow{display:flex;gap:8px;align-items:center}
+.copyrow code{flex:1;min-width:0;font-family:var(--mono);font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;overflow-wrap:anywhere;color:var(--fg)}
+.btn{min-height:48px;padding:0 18px;border-radius:12px;border:none;background:var(--fg);color:var(--bg);font-weight:600;font-size:15px}
+.btn.ghost{background:transparent;color:var(--fg);border:1px solid var(--line-strong)}
+.btn.small{min-height:40px;font-size:13px;padding:0 12px}
+.btn[disabled]{opacity:.45;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.msg{font-size:13px;min-height:18px}
+.msg.ok{color:var(--ok)}.msg.bad{color:var(--bad)}
+.step{display:flex;gap:12px;align-items:flex-start}
+.step .num{width:26px;height:26px;flex:none;border-radius:99px;border:1px solid var(--line-strong);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.step.done .num{background:var(--ok);border-color:var(--ok);color:var(--bg)}
+.step .grow{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px}
+.fine{font-size:12px;color:var(--faint)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1><svg class="mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="2.5" fill="var(--pink)" stroke="none"/><path d="M5.6 18.4a9 9 0 0 1 0-12.8M18.4 5.6a9 9 0 0 1 0 12.8"/><path d="M8.5 15.5a5 5 0 0 1 0-7M15.5 8.5a5 5 0 0 1 0 7"/></svg>Concert Radar</h1>
+      <p class="status" id="status"></p>
+    </div>
+    <div class="row" style="flex-wrap:nowrap">
+      <button class="ibtn" id="refreshBtn" title="Check again" aria-label="Check again" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
+      <button class="ibtn" id="gearBtn" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+    </div>
+  </header>
+
+  <!-- the list -->
+  <main id="listView" hidden>
+    <div class="seg" role="group" aria-label="Which shows">
+      <button id="segMine" aria-pressed="true">Your artists<span class="n" id="nMine"></span></button>
+      <button id="segAll" aria-pressed="false">Everything<span class="n" id="nAll"></span></button>
+    </div>
+    <p class="newline" id="newLine" hidden></p>
+    <div id="sections"></div>
+  </main>
+
+  <!-- setup and settings -->
+  <main id="setupView" hidden>
+    <div class="panel">
+      <h2 id="setupTitle">Set up Concert Radar</h2>
+      <p id="setupIntro">Two connections: your Cloudflare helper looks up shows on Ticketmaster, and Spotify tells the app who you listen to. Your listening stays on this device.</p>
+
+      <div class="step" id="stepHelper">
+        <div class="num">1</div>
+        <div class="grow">
+          <label>Helper address
+            <input type="url" id="helperInput" placeholder="https://concert-radar.yourname.workers.dev" autocomplete="off" spellcheck="false">
+          </label>
+          <div class="row"><button class="btn small ghost" id="testHelper">Test the helper</button><span class="msg" id="helperMsg"></span></div>
+        </div>
+      </div>
+
+      <div class="step" id="stepSpotify">
+        <div class="num">2</div>
+        <div class="grow">
+          <p>In the Spotify developer dashboard, open the app you use for Setlist Buddy and add this Redirect URI:</p>
+          <div class="copyrow"><code id="redirectUri"></code><button class="btn small ghost" id="copyUri">Copy</button></div>
+          <label>Spotify Client ID
+            <input type="text" id="clientInput" autocomplete="off" spellcheck="false">
+          </label>
+          <p class="fine" id="clientNote" hidden>Filled in from Setlist Buddy.</p>
+          <div class="row"><button class="btn" id="connectBtn">Connect Spotify</button><span class="msg" id="spotifyMsg"></span></div>
+        </div>
+      </div>
+
+      <div class="row" id="settingsExtras" hidden>
+        <button class="btn small ghost" id="rescanBtn">Re-read my Spotify now</button>
+        <button class="btn small ghost" id="disconnectBtn">Disconnect Spotify</button>
+      </div>
+      <div class="row" id="doneRow" hidden><button class="btn" id="doneBtn">Show my list</button></div>
+    </div>
+  </main>
+</div>
+
+<script src="spotify.js"></script>
+<script src="shows.js"></script>
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const K = { helper: 'cr.helper', shows: 'cr.shows', seen: 'cr.seen', view: 'cr.view' };
+  const ls = {
+    get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+    del(k) { try { localStorage.removeItem(k); } catch {} }
+  };
+  const ARTISTS_MAX_AGE = 20 * 3600000;
+  const SHOWS_MAX_AGE = 20 * 3600000;
+  const PREVIEW = 8; // shows per city before "Show all" in Everything
+
+  const state = {
+    shows: ls.get(K.shows),
+    artists: SPOT.cachedArtists(),
+    view: ls.get(K.view) || 'mine',
+    newIds: new Set(),
+    expanded: new Set(),
+    loadingShows: false, loadingArtists: '', error: ''
+  };
+
+  const helper = () => (ls.get(K.helper) || '').replace(/\/+$/, '');
+  const ready = () => !!helper() && SPOT.isConnected();
+
+  // ---------- dates ----------
+  const todayISO = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+  const MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const parts = (iso) => { const [y, m, d] = iso.split('-').map(Number); const dt = new Date(y, m - 1, d); return { y, m: MON[m - 1], d, w: DOW[dt.getDay()] }; };
+  const clock = (hhmm) => { if (!hhmm) return ''; let [h, m] = hhmm.split(':').map(Number); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return m ? `${h}:${String(m).padStart(2, '0')} ${ap}` : `${h} ${ap}`; };
+  const ago = (iso) => {
+    const t = Date.parse(iso); if (!t) return '';
+    const d = new Date(t), now = new Date();
+    const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    if (d.toDateString() === now.toDateString()) return 'today ' + time;
+    const y = new Date(now); y.setDate(now.getDate() - 1);
+    if (d.toDateString() === y.toDateString()) return 'yesterday ' + time;
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + time;
+  };
+  const saleDay = (iso) => new Date(iso).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+
+  // ---------- matching ----------
+  // Why an artist is on your radar, strongest reason first.
+  function reasons(a) {
+    const out = [];
+    if (a.top) out.push({ t: 'Top artist', strong: true });
+    if (a.follow) out.push({ t: 'Following', strong: true });
+    if (a.liked) out.push({ t: a.liked === 1 ? 'Liked 1 song' : `Liked ${a.liked} songs`, strong: a.liked >= 5 });
+    if (a.rotation && !a.top) out.push({ t: 'On repeat', strong: false });
+    if (a.recent && out.length < 2) out.push({ t: 'Played recently', strong: false });
+    return out.slice(0, 2);
+  }
+  const weight = (a) => (a.top ? 100 : 0) + (a.follow ? 60 : 0) + Math.min(a.liked, 50) * 2 + (a.rotation ? 20 : 0) + (a.recent ? 5 : 0);
+
+  function annotate(events, artistMap) {
+    const map = artistMap || {};
+    return events.map((e) => {
+      const names = e.artists && e.artists.length ? e.artists : [e.name];
+      const hits = [];
+      for (const n of names) { const a = map[SPOT.norm(n)]; if (a) hits.push({ billed: n, a }); }
+      if (!hits.length && e.artists && e.artists.length) { const a = map[SPOT.norm(e.name)]; if (a) hits.push({ billed: e.name, a }); }
+      hits.sort((x, y) => weight(y.a) - weight(x.a));
+      return { ...e, hits };
+    });
+  }
+
+  // Ticketmaster sometimes lists one night more than once (a VIP listing, a second date page). Keep one.
+  function dedupe(list) {
+    const seen = new Map();
+    for (const e of list) {
+      const key = e.date + '|' + SPOT.norm(e.venue) + '|' + SPOT.norm((e.artists && e.artists[0]) || e.name);
+      const prev = seen.get(key);
+      if (!prev || e.name.length < prev.name.length) seen.set(key, e);
+    }
+    return [...seen.values()];
+  }
+
+  // ---------- rendering ----------
+  const esc = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  function whoLine(e) {
+    const billed = e.artists && e.artists.length ? e.artists : [];
+    if (!billed.length) return `<span class="hit">${esc(e.name)}</span>`;
+    const hitNames = new Set(e.hits.map((h) => h.billed));
+    const head = billed[0];
+    const rest = billed.slice(1);
+    // Lead with the headliner; if your artist is the opener, say so.
+    let html = `<span class="${hitNames.has(head) || !e.hits.length ? 'hit' : 'also'}">${esc(head)}</span>`;
+    if (rest.length) {
+      const shown = rest.slice(0, 4).map((n) => hitNames.has(n) ? `<span class="hit">${esc(n)}</span>` : esc(n));
+      html += ` <span class="also">with ${shown.join(', ')}${rest.length > 4 ? ` +${rest.length - 4}` : ''}</span>`;
+    }
+    return html;
+  }
+
+  function showRow(e, mine) {
+    const p = parts(e.date);
+    const tags = [];
+    if (state.newIds.has(e.id)) tags.push('<span class="tag new">New</span>');
+    if (e.hits.length) {
+      const h = e.hits[0];
+      const label = e.hits.length > 1 || (e.artists && e.artists[0] !== h.billed) ? h.a.name + ': ' : '';
+      reasons(h.a).forEach((r, i) => tags.push(`<span class="tag${r.strong ? ' strong' : ''}">${i === 0 ? esc(label) : ''}${esc(r.t)}</span>`));
+      if (e.hits.length > 1) tags.push(`<span class="tag">+${e.hits.length - 1} more you know</span>`);
+    }
+    if (e.onsale) tags.push(`<span class="tag sale">On sale ${esc(saleDay(e.onsale))}</span>`);
+    if (e.status === 'postponed' || e.status === 'rescheduled') tags.push(`<span class="tag off">${e.status === 'postponed' ? 'Postponed' : 'Rescheduled'}</span>`);
+    // The city only when it isn't the section's city (Overland Park under Kansas City, say).
+    const regionName = ((state.shows && state.shows.regions) || []).find((r) => r.id === e.region)?.name || '';
+    const showCity = e.city && e.city !== e.venue && SPOT.norm(e.city) !== SPOT.norm(regionName);
+    const where = [e.venue, showCity ? e.city : '', clock(e.time)].filter(Boolean).join(' · ');
+    return `<a class="show${!mine && !e.hits.length ? ' dim' : ''}" href="${esc(e.url)}" target="_blank" rel="noopener">
+      <div class="date"><div class="m">${p.m}</div><div class="d">${p.d}</div><div class="w">${p.w}</div></div>
+      <div class="body"><div class="who">${whoLine(e)}</div><div class="where">${esc(where)}</div>${tags.length ? `<div class="tags">${tags.join('')}</div>` : ''}</div>
+    </a>`;
+  }
+
+  function render() {
+    if (!ready()) return;
+    $('listView').hidden = false; $('setupView').hidden = true; $('refreshBtn').hidden = false;
+    $('refreshBtn').classList.toggle('spin', state.loadingShows || !!state.loadingArtists);
+    renderStatus();
+    const data = state.shows;
+    if (!data) { $('sections').innerHTML = state.loadingShows ? '<p class="none">Checking for shows…</p>' : ''; return; }
+
+    const today = todayISO();
+    const all = dedupe(annotate((data.events || []).filter((e) => e.date >= today), state.artists && state.artists.artists));
+    const mine = all.filter((e) => e.hits.length);
+    $('nMine').textContent = state.artists ? mine.length : '…';
+    $('nAll').textContent = all.length;
+    $('segMine').setAttribute('aria-pressed', state.view === 'mine');
+    $('segAll').setAttribute('aria-pressed', state.view === 'all');
+
+    const newMine = mine.filter((e) => state.newIds.has(e.id)).length;
+    $('newLine').hidden = !newMine;
+    $('newLine').textContent = newMine === 1 ? '1 new show from your artists since you last looked' : `${newMine} new shows from your artists since you last looked`;
+
+    const list = state.view === 'mine' ? mine : all;
+    $('sections').innerHTML = (data.regions || []).map((r) => {
+      const items = list.filter((e) => e.region === r.id);
+      const open = state.view === 'mine' || state.expanded.has(r.id);
+      const visible = open ? items : items.slice(0, PREVIEW);
+      const empty = state.view === 'mine'
+        ? (state.artists ? 'None of your artists are booked here yet.' : 'Reading your Spotify…')
+        : 'No shows listed.';
+      return `<section>
+        <div class="city"><h2>${esc(r.name)}</h2><span class="count">${items.length} ${items.length === 1 ? 'show' : 'shows'}</span></div>
+        ${items.length ? visible.map((e) => showRow(e, state.view === 'mine')).join('') : `<p class="none">${empty}</p>`}
+        ${!open && items.length > PREVIEW ? `<button class="more" data-expand="${esc(r.id)}">Show all ${items.length}</button>` : ''}
+      </section>`;
+    }).join('');
+  }
+
+  function renderStatus() {
+    const bits = [];
+    if (state.error) bits.push(`<span class="warn">${esc(state.error)}</span>`);
+    else if (state.loadingShows) bits.push(esc(state.loadingShowsMsg || 'Checking for shows') + '…');
+    else if (state.loadingArtists) bits.push(esc(state.loadingArtists) + '…');
+    else {
+      if (state.shows) bits.push('Shows checked ' + esc(ago(state.shows.updatedAt)));
+      if (state.artists) bits.push(Object.keys(state.artists.artists).length.toLocaleString() + ' artists');
+      if (state.shows && state.shows.partial) bits.push('<span class="warn">scan incomplete</span>');
+    }
+    $('status').innerHTML = bits.join(' · ');
+  }
+
+  // ---------- data ----------
+  // The daily scan: reuse today's list unless it's older than SHOWS_MAX_AGE or you tap refresh.
+  async function loadShows(force) {
+    const c = state.shows;
+    if (!force && c && Date.now() - Date.parse(c.updatedAt) < SHOWS_MAX_AGE) return;
+    if (state.loadingShows) return;
+    state.loadingShows = true; render();
+    try {
+      const data = await SHOWS.scan(helper(), (m) => { state.loadingShowsMsg = m; renderStatus(); });
+      // Shows you haven't seen before get a "New" tag for this visit.
+      const prev = ls.get(K.seen);
+      const ids = (data.events || []).map((e) => e.id);
+      if (prev) { const old = new Set(prev); state.newIds = new Set(ids.filter((id) => !old.has(id))); }
+      ls.set(K.seen, prev ? [...new Set([...ids, ...prev])].slice(-6000) : ids);
+      state.shows = data; ls.set(K.shows, data); state.error = '';
+    } catch (e) {
+      state.error = state.shows ? 'Couldn’t check for new shows; showing the last list' : e.message;
+    } finally { state.loadingShows = false; state.loadingShowsMsg = ''; render(); }
+  }
+
+  async function loadArtists(force) {
+    const c = state.artists;
+    if (!force && c && Date.now() - c.at < ARTISTS_MAX_AGE) return;
+    state.loadingArtists = 'Reading your Spotify'; render();
+    try {
+      state.artists = await SPOT.gatherArtists((m) => { state.loadingArtists = m; renderStatus(); });
+      state.error = '';
+    } catch (e) {
+      if (e.code === 'not_connected') { state.loadingArtists = ''; return showSetup(false); }
+      state.error = e.message;
+    } finally { state.loadingArtists = ''; render(); }
+  }
+
+  // ---------- setup ----------
+  function showSetup(asSettings) {
+    $('listView').hidden = true; $('setupView').hidden = false; $('refreshBtn').hidden = true;
+    $('setupTitle').textContent = asSettings ? 'Settings' : 'Set up Concert Radar';
+    $('setupIntro').hidden = asSettings;
+    $('helperInput').value = helper();
+    $('redirectUri').textContent = SPOT.redirectUri();
+    const id = SPOT.clientId();
+    $('clientInput').value = id;
+    $('clientNote').hidden = !(id && !ls.get('cr.spotify.clientId'));
+    syncSteps();
+    $('settingsExtras').hidden = !SPOT.isConnected();
+    $('doneRow').hidden = !ready();
+    renderStatus();
+  }
+  function syncSteps() {
+    $('stepHelper').classList.toggle('done', !!helper());
+    $('stepSpotify').classList.toggle('done', SPOT.isConnected());
+    $('connectBtn').textContent = SPOT.isConnected() ? 'Reconnect Spotify' : 'Connect Spotify';
+  }
+  function saveHelper() {
+    const v = $('helperInput').value.trim().replace(/\/+$/, '');
+    if (v && !/^https:\/\//.test(v)) { $('helperMsg').className = 'msg bad'; $('helperMsg').textContent = 'Use the https:// address.'; return false; }
+    ls.set(K.helper, v); syncSteps(); $('doneRow').hidden = !ready(); return true;
+  }
+
+  $('helperInput').addEventListener('change', saveHelper);
+  $('testHelper').addEventListener('click', async () => {
+    if (!saveHelper() || !helper()) return;
+    const m = $('helperMsg'); m.className = 'msg'; m.textContent = 'Checking…';
+    try {
+      const r = await fetch(helper() + '/health'); const d = await r.json();
+      if (!d.ok) throw new Error();
+      if (!d.ticketmasterKey) { m.className = 'msg bad'; m.textContent = 'Connected, but the TICKETMASTER_KEY secret is missing.'; return; }
+      m.className = 'msg ok'; m.textContent = 'Working.';
+    } catch { m.className = 'msg bad'; m.textContent = 'No answer. Check the address and that the worker is deployed.'; }
+  });
+  $('copyUri').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(SPOT.redirectUri()); $('copyUri').textContent = 'Copied'; setTimeout(() => $('copyUri').textContent = 'Copy', 1500); } catch {}
+  });
+  $('connectBtn').addEventListener('click', async () => {
+    saveHelper();
+    const id = $('clientInput').value.trim();
+    if (!id) { $('spotifyMsg').className = 'msg bad'; $('spotifyMsg').textContent = 'Paste the Client ID first.'; return; }
+    SPOT.setClientId(id);
+    try { await SPOT.login(); } catch (e) { $('spotifyMsg').className = 'msg bad'; $('spotifyMsg').textContent = e.message; }
+  });
+  $('disconnectBtn').addEventListener('click', () => { SPOT.disconnect(); state.artists = null; showSetup(true); });
+  $('rescanBtn').addEventListener('click', () => { if (!saveHelper()) return; location.hash = ''; openList(); loadArtists(true); });
+  $('doneBtn').addEventListener('click', () => { if (!saveHelper()) return; location.hash = ''; openList(); });
+  $('gearBtn').addEventListener('click', () => showSetup(true));
+
+  // ---------- list controls ----------
+  $('segMine').addEventListener('click', () => { state.view = 'mine'; ls.set(K.view, 'mine'); render(); });
+  $('segAll').addEventListener('click', () => { state.view = 'all'; ls.set(K.view, 'all'); render(); });
+  $('sections').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-expand]'); if (!b) return;
+    state.expanded.add(b.dataset.expand); render();
+  });
+  $('refreshBtn').addEventListener('click', () => { loadShows(true); loadArtists(true); });
+
+  function openList() {
+    if (!ready()) return showSetup(false);
+    render();
+    loadShows(false);
+    loadArtists(false);
+  }
+
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if (location.hash === '#settings') showSetup(true);
+  else { if (location.hash === '#connected') history.replaceState(null, '', location.pathname); openList(); }
+  // Coming back to the app after a while: freshen quietly.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && ready() && !$('listView').hidden && state.shows && Date.now() - Date.parse(state.shows.updatedAt) > 6 * 3600000) loadShows(false);
+  });
+})();
+</script>
+</body>
+</html>
