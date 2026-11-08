@@ -49,7 +49,10 @@ export default {
     const url = new URL(req.url);
 
     if (url.pathname === '/' || url.pathname === '/health') {
-      return json({ ok: true, ticketmasterKey: !!env.TICKETMASTER_KEY, storage: !!env.CR, venues: Object.keys(VENUES) }, 200, cors);
+      // storageSince: when this storage was first used. If it ever changes, saved Favorites were lost.
+      let storageSince = null;
+      if (env.CR) { storageSince = await env.CR.get('since'); if (!storageSince) { storageSince = new Date().toISOString(); await env.CR.put('since', storageSince); } }
+      return json({ ok: true, ticketmasterKey: !!env.TICKETMASTER_KEY, storage: !!env.CR, storageSince, venues: Object.keys(VENUES) }, 200, cors);
     }
 
     // Small saved things: your Favorites and your listening-history summary.
