@@ -1,0 +1,8 @@
+# Cloudflare reads this when it deploys the helper from GitHub (Workers Builds).
+# The name must match the worker's name in the Cloudflare dashboard.
+# (helper/wrangler.toml is the same thing, for when the build's root directory is set to helper.)
+name = "concert-radar"
+main = "helper/worker.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+# TICKETMASTER_KEY is a secret set in the dashboard; deploys keep it.
