@@ -4,14 +4,17 @@
 // What it does
 //   GET /events?...      Passes a Ticketmaster event search through, adding your key. Only event searches are allowed.
 //   GET /venue?id=...    Reads one venue's calendar (from the list below) and returns its shows.
-//   GET /health          Quick check that the key is set up.
+//   GET/POST /favorites  Your Favorites list, so phone and computer share it.
+//   GET/POST /history    Play counts per artist from your Spotify listening-history file.
+//   GET /health          Quick check that the key and storage are set up.
 //
 // Your Spotify listening never comes here; the app matches shows to your artists on your own device.
 //
 // Setup (Cloudflare dashboard)
 //   1. Workers & Pages → Create → Worker → name it concert-radar → Deploy → Edit code → paste this file → Deploy.
 //   2. Settings → Variables and Secrets → add a Secret named TICKETMASTER_KEY (your Ticketmaster Consumer Key).
-//   To update: Edit code → select all → paste the new version → Deploy. The secret stays.
+//   Storage (Favorites, history) is the KV namespace bound as CR; wrangler.toml creates it on deploy.
+//   Deploys run automatically from GitHub (Settings → Builds). The secret stays.
 
 const APP_ORIGINS = ['https://titusmith.github.io'];
 const TM = 'https://app.ticketmaster.com/discovery/v2/events.json';
@@ -35,7 +38,7 @@ export default {
     const origin = req.headers.get('Origin') || '';
     const cors = {
       'Access-Control-Allow-Origin': APP_ORIGINS.includes(origin) ? origin : APP_ORIGINS[0],
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
       'Access-Control-Max-Age': '86400',
       'Vary': 'Origin'
@@ -46,7 +49,34 @@ export default {
     const url = new URL(req.url);
 
     if (url.pathname === '/' || url.pathname === '/health') {
-      return json({ ok: true, ticketmasterKey: !!env.TICKETMASTER_KEY, venues: Object.keys(VENUES) }, 200, cors);
+      return json({ ok: true, ticketmasterKey: !!env.TICKETMASTER_KEY, storage: !!env.CR, venues: Object.keys(VENUES) }, 200, cors);
+    }
+
+    // Small saved things: your Favorites and your listening-history summary.
+    if (url.pathname === '/favorites' || url.pathname === '/history') {
+      if (!env.CR) return json({ error: 'no_storage', message: 'The helper has no storage yet.' }, 500, cors);
+      const key = url.pathname.slice(1);
+      if (req.method === 'GET') {
+        const v = await env.CR.get(key, 'json');
+        return json(v || (key === 'favorites' ? { artists: [], updatedAt: null } : { artists: {}, updatedAt: null }), 200, cors);
+      }
+      if (req.method === 'POST') {
+        // Only from the app itself (a browser always sends Origin on POST).
+        if (!APP_ORIGINS.includes(origin)) return json({ error: 'not_allowed' }, 403, cors);
+        const body = await req.text();
+        if (body.length > (key === 'favorites' ? 100000 : 5000000)) return json({ error: 'too_big' }, 413, cors);
+        let data;
+        try { data = JSON.parse(body); } catch { return json({ error: 'bad_json' }, 400, cors); }
+        if (key === 'favorites') {
+          if (!Array.isArray(data.artists)) return json({ error: 'bad_list' }, 400, cors);
+          data = { artists: data.artists.slice(0, 1000).map((a) => ({ name: String(a.name || '').slice(0, 120), id: a.id ? String(a.id).slice(0, 40) : undefined })).filter((a) => a.name), updatedAt: new Date().toISOString() };
+        } else {
+          if (!data.artists || typeof data.artists !== 'object') return json({ error: 'bad_history' }, 400, cors);
+          data = { artists: data.artists, from: data.from || null, to: data.to || null, updatedAt: new Date().toISOString() };
+        }
+        await env.CR.put(key, JSON.stringify(data));
+        return json(key === 'favorites' ? data : { ok: true, updatedAt: data.updatedAt, count: Object.keys(data.artists).length }, 200, cors);
+      }
     }
 
     if (url.pathname === '/events' && req.method === 'GET') {

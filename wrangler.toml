@@ -5,4 +5,7 @@ name = "concert-radar"
 main = "helper/worker.js"
 compatibility_date = "2026-11-01"
 workers_dev = true
+# Storage for Favorites and listening history. Cloudflare creates it on the first deploy.
+kv_namespaces = [{ binding = "CR" }]
+
 # TICKETMASTER_KEY is a secret set in the dashboard; deploys keep it.
