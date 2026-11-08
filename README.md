@@ -26,6 +26,11 @@ It holds your Ticketmaster key so it isn't in the app. The free plan is enough.
 3. In the worker: **Settings → Variables and Secrets → Add**, type **Secret**, name `TICKETMASTER_KEY`, value your Consumer Key.
 4. Copy the worker's address (like `https://concert-radar.yourname.workers.dev`).
 
+#### Automatic deploys (optional)
+
+Connect the worker to this repo once and every push that changes `helper/` redeploys it:
+worker → **Settings → Builds → Connect** → GitHub → `titusmith/concert-radar`, branch `main`, root directory `helper`, deploy command `npx wrangler deploy`. `helper/wrangler.toml` holds the worker's name; the secret stays.
+
 ### 2. Spotify
 
 Reuses the Spotify developer app from Setlist Buddy.
