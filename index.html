@@ -69,6 +69,7 @@ section{margin-top:22px}
 .more-btn:hover{color:var(--fg)}
 .show.hiddenrow .link{opacity:.55}
 .menu{position:fixed;z-index:20;background:var(--raised);border:1px solid var(--line-strong);border-radius:12px;padding:6px;box-shadow:0 12px 32px rgba(0,0,0,.5);display:flex;flex-direction:column}
+.menu button[data-act=all]{border-top:1px solid var(--line-strong);border-radius:0 0 8px 8px}
 .menu button{min-height:44px;text-align:left;padding:0 12px;border:none;background:transparent;border-radius:8px;font-size:15px}
 .menu button:hover,.menu button:focus-visible{background:var(--surface)}
 #toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 20px);transform:translate(-50%,140%);transition:transform .2s ease;z-index:30;display:flex;align-items:center;gap:14px;max-width:calc(100vw - 32px);background:var(--fg);color:var(--bg);border-radius:12px;padding:10px 10px 10px 16px;font-size:14px}
@@ -492,26 +493,34 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
   // ---------- hiding ----------
   const rowIndex = new Map(); // show id → { e, target } for the ⋯ menu and swipes
   // Why a show is hidden: you hid that night ('show'), or every artist you know on it is one you're not interested in ('artist').
+  // Artists you're not interested in drop out of a show's tags; the show hides only when nobody you care about is left.
   function markHidden(list) {
     const H = state.hidden;
     return list.map((e) => {
-      let why = H.shows[e.id] ? 'show' : '';
-      if (!why) {
-        const keys = e.hits.length ? e.hits.filter((h) => !h.a.fav).map((h) => h.k) : [SPOT.norm((e.artists && e.artists[0]) || e.name)];
-        if (keys.length && keys.length === (e.hits.length || 1) && keys.every((k) => H.artists[k])) why = 'artist';
+      if (H.shows[e.id]) return { ...e, hiddenWhy: 'show' };
+      if (e.hits.length) {
+        const keep = e.hits.filter((h) => h.a.fav || !H.artists[h.k]);
+        if (!keep.length) return { ...e, hiddenWhy: 'artist' };
+        return keep.length === e.hits.length ? e : { ...e, hits: keep, allHits: e.hits };
       }
-      return why ? { ...e, hiddenWhy: why } : e;
+      return H.artists[SPOT.norm((e.artists && e.artists[0]) || e.name)] ? { ...e, hiddenWhy: 'artist' } : e;
     });
   }
   function setHidden(next) { state.hidden = next; ls.set('cr.hidden', next); saveHidden(); render(); }
   function hideShow(id) { const ix = rowIndex.get(id); setHidden({ ...state.hidden, shows: { ...state.hidden.shows, [id]: ix ? showLabel(ix.e) : true } }); toast(`Hidden: ${ix ? showLabel(ix.e) : 'show'}`, () => unhideShow(id)); }
   function unhideShow(id) { const shows = { ...state.hidden.shows }; delete shows[id]; setHidden({ ...state.hidden, shows }); }
   function hideArtist(k, name) { setHidden({ ...state.hidden, artists: { ...state.hidden.artists, [k]: name } }); toast(`Not interested in ${name}`, () => unhideArtist(k)); }
+  function hideArtists(list) {
+    const artists = { ...state.hidden.artists };
+    list.forEach((a) => { artists[a.k] = a.name; });
+    setHidden({ ...state.hidden, artists });
+    toast(`Not interested in ${list.map((a) => a.name).join(', ')}`, () => { const back = { ...state.hidden.artists }; list.forEach((a) => delete back[a.k]); setHidden({ ...state.hidden, artists: back }); });
+  }
   function unhideArtist(k) { const artists = { ...state.hidden.artists }; delete artists[k]; setHidden({ ...state.hidden, artists }); }
   function unhide(id) {
     const ix = rowIndex.get(id);
     if (state.hidden.shows[id]) return unhideShow(id);
-    if (ix) { const artists = { ...state.hidden.artists }; (ix.e.hits.length ? ix.e.hits.map((h) => h.k) : [ix.target.k]).forEach((k) => delete artists[k]); setHidden({ ...state.hidden, artists }); }
+    if (ix) { const artists = { ...state.hidden.artists }; (ix.e.hits.length ? (ix.e.allHits || ix.e.hits).map((h) => h.k) : [ix.target.k]).forEach((k) => delete artists[k]); setHidden({ ...state.hidden, artists }); }
   }
   const showLabel = (e) => { const p = parts(e.date); return `${(e.artists && e.artists[0]) || e.name}, ${p.m.charAt(0) + p.m.slice(1).toLowerCase()} ${p.d}`; };
 
@@ -538,11 +547,15 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
     closeMenu();
     const ix = rowIndex.get(id); if (!ix) return;
     const e = ix.e;
-    const artist = e.hits[0] ? { k: e.hits[0].k, name: e.hits[0].a.name } : ix.target;
+    // Everyone on the bill you know (or, for a show you don't know anyone on, the billed acts).
+    const people = e.hits.length
+      ? e.hits.filter((h) => !h.a.fav).map((h) => ({ k: h.k, name: h.a.name }))
+      : ((e.artists && e.artists.length ? e.artists : [e.name]).slice(0, 5).map((n) => ({ k: SPOT.norm(n), name: n })));
     const items = e.hiddenWhy
       ? [`<button role="menuitem" data-act="unhide">Unhide this show</button>`]
       : [`<button role="menuitem" data-act="hide">Hide this show</button>`,
-         `<button role="menuitem" data-act="artist">Not interested in ${esc(artist.name)}</button>`];
+         ...people.slice(0, 6).map((a, i) => `<button role="menuitem" data-act="artist" data-i="${i}">Not interested in ${esc(a.name)}</button>`),
+         ...(people.length > 1 ? [`<button role="menuitem" data-act="all">Not interested in any of them</button>`] : [])];
     const m = document.createElement('div');
     m.className = 'menu'; m.id = 'menu'; m.setAttribute('role', 'menu');
     m.innerHTML = items.join('');
@@ -557,7 +570,8 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
       const b = ev.target.closest('[data-act]'); if (!b) return;
       closeMenu();
       if (b.dataset.act === 'hide') hideShow(id);
-      else if (b.dataset.act === 'artist') hideArtist(artist.k, artist.name);
+      else if (b.dataset.act === 'artist') { const a = people[+b.dataset.i]; hideArtist(a.k, a.name); }
+      else if (b.dataset.act === 'all') hideArtists(people);
       else unhide(id);
     });
     m.querySelector('button').focus();
