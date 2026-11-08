@@ -6,7 +6,7 @@
   const API = 'https://api.spotify.com/v1';
   const AUTH = 'https://accounts.spotify.com/authorize';
   const TOKEN = 'https://accounts.spotify.com/api/token';
-  const SCOPES = 'user-top-read user-follow-read user-library-read user-read-recently-played';
+  const SCOPES = 'user-top-read user-follow-read user-library-read user-read-recently-played playlist-read-private playlist-read-collaborative';
   const K = { client: 'cr.spotify.clientId', tok: 'cr.spotify.tokens', pkce: 'cr.spotify.pkce', artists: 'cr.artists' };
   const SETLIST_BUDDY_CLIENT = 'sc.spotify.clientId'; // same site, so Setlist Buddy's Client ID is readable here
   const MAX_LIKED = 10000;
@@ -61,9 +61,12 @@
     ls.set(K.tok, {
       access: t.access_token,
       refresh: t.refresh_token || old.refresh,
-      expiresAt: Date.now() + ((t.expires_in || 3600) - 60) * 1000
+      expiresAt: Date.now() + ((t.expires_in || 3600) - 60) * 1000,
+      scope: t.scope || old.scope || ''
     });
   }
+  // Connected before playlists were added: Spotify needs one more yes for the new permission.
+  const needsReconnect = () => { const t = ls.get(K.tok); return !!t && !/playlist-read-private/.test(t.scope || ''); };
 
   async function finishLogin(search) {
     const p = new URLSearchParams(search);
@@ -117,15 +120,16 @@
 
   // ---------- artists ----------
   // Names are matched loosely: case, accents, "&" vs "and", a leading "The" and punctuation don't matter.
-  const norm = (s) => (s || '')
+  // normFull keeps a leading "The", for finding a name inside a longer title ("The Midnight" ≠ "…After Midnight").
+  const normFull = (s) => (s || '')
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .replace(/\s*[([].*?[)\]]\s*/g, ' ')
     .replace(/&/g, ' and ')
     .replace(/[^a-z0-9 ]/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/^the /, '');
+    .trim();
+  const norm = (s) => normFull(s).replace(/^the /, '');
 
   // Returns { at, artists: { normName: { name, top, rotation, follow, liked, recent } } }
   async function gatherArtists(onProgress = () => {}) {
@@ -134,8 +138,8 @@
       if (!a || !a.name) return;
       const k = norm(a.name);
       if (!k) return;
-      const r = map[k] || (map[k] = { name: a.name, top: false, rotation: false, follow: false, liked: 0, recent: 0 });
-      if (field === 'liked' || field === 'recent') r[field] += n; else r[field] = true;
+      const r = map[k] || (map[k] = { name: a.name, top: false, rotation: false, follow: false, liked: 0, recent: 0, albums: 0, playlists: 0 });
+      if (field === 'liked' || field === 'recent' || field === 'albums' || field === 'playlists') r[field] += n; else r[field] = true;
     };
 
     onProgress('Your top artists');
@@ -173,13 +177,55 @@
       batch.forEach(take);
     }
 
-    const out = { at: Date.now(), likedTotal: total, artists: map };
+    // Saved albums (each album's artists).
+    try {
+      for (let o = 0, n = 1; o < Math.min(n, 2000); o += 50) {
+        onProgress('Saved albums');
+        const d = await api(`/me/albums?limit=50&offset=${o}`);
+        n = d?.total || 0;
+        (d?.items || []).forEach((it) => (it.album?.artists || []).forEach((a) => add(a, 'albums')));
+      }
+    } catch (e) { if (e.code === 'not_connected') throw e; }
+
+    // Playlists you made or collaborate on (Spotify only shares what's inside those).
+    let playlistsRead = 0;
+    if (!needsReconnect()) {
+      try {
+        const me = await api('/me');
+        const mine = [];
+        for (let o = 0, n = 1; o < Math.min(n, 1000); o += 50) {
+          const d = await api(`/me/playlists?limit=50&offset=${o}`);
+          n = d?.total || 0;
+          (d?.items || []).forEach((p) => { if (p && (p.owner?.id === me?.id || p.collaborative)) mine.push(p.id); });
+        }
+        const readOne = async (id) => {
+          for (let o = 0, n = 1, pages = 0; o < n && pages < 20; o += 50, pages++) {
+            const d = await api(`/playlists/${id}/items?limit=50&offset=${o}`);
+            n = d?.total || 0;
+            (d?.items || []).forEach((it) => ((it.item || it.track)?.artists || []).forEach((a) => add(a, 'playlists')));
+          }
+        };
+        for (let i = 0; i < mine.length; i += 4) {
+          onProgress(`Your playlists ${Math.min(mine.length, i + 4)} of ${mine.length}`);
+          await Promise.all(mine.slice(i, i + 4).map((id) => readOne(id).catch(() => {})));
+        }
+        playlistsRead = mine.length;
+      } catch (e) { if (e.code === 'not_connected') throw e; }
+    }
+
+    const out = { at: Date.now(), likedTotal: total, playlistsRead, artists: map };
     ls.set(K.artists, out);
     return out;
   }
 
   const cachedArtists = () => ls.get(K.artists);
 
+  // Artist search for adding Favorites (Spotify allows 10 results per search).
+  async function searchArtists(q) {
+    const d = await api(`/search?type=artist&limit=10&q=${encodeURIComponent(q)}`);
+    return (d?.artists?.items || []).map((a) => ({ name: a.name, id: a.id, image: (a.images || []).slice(-1)[0]?.url || '' }));
+  }
+
   window.SPOT = { SpotifyError, redirectUri, clientId, setClientId, login, finishLogin, isConnected, disconnect,
-    gatherArtists, cachedArtists, norm };
+    gatherArtists, cachedArtists, norm, normFull, searchArtists, needsReconnect };
 })();

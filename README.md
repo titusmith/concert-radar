@@ -6,8 +6,10 @@ A quick-glance list of upcoming shows near you by artists you actually listen to
 - **Your artists:** read from Spotify: top artists and songs, artists you follow, recently played, and every artist on your Liked Songs (counted). Each show says why it's there: *Top artist*, *Following*, *Liked 3 songs*, *On repeat*, *Played recently*.
 - **Everything:** every music show in your cities, with yours highlighted.
 - **Venue calendars:** shows sold outside Ticketmaster are read from the venues' own sites: the Bottleneck, the Granada, the Midland, the Truman, recordBar, Warehouse on Broadway, and the Cotillion (Wichita, road trips only). Add or change them in `VENUES` in both `helper/worker.js` and `shows.js`.
-- **Favourite:** tap **+** on any show to tag that artist as a Favourite (★). Favourites are saved on each device.
-- **Worth the drive:** Favourites, top artists, artists you follow and anyone you've liked 10+ songs from, playing within 300 miles of Lawrence but not coming to Lawrence, KC or Topeka.
+- **Favorites (★):** bands you'll see no matter what. Add them on the Favorites screen (search Spotify or type a name) or tap **+** on any show. Kept on the helper, so every device has the same list.
+- **Saved albums, your playlists and full history:** besides Liked Songs, follows and top artists, the app reads your saved albums and the playlists you made. For every artist you've ever played, add Spotify's Extended streaming history file in Settings.
+- **Title matches:** venue calendars often list only a show title, so one-word names (Live, Camp) only match when they're the billed act, and **Not them** turns off a wrong title match.
+- **Worth the drive:** Favorites, top artists, artists you follow and anyone you've liked 10+ songs from, playing within 300 miles of Lawrence but not coming to Lawrence, KC or Topeka.
 - **New** marks shows that appeared since you last looked. **On sale …** shows when tickets aren't on sale yet.
 - Tap a show to open it on Ticketmaster.
 

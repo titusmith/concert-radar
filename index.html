@@ -66,6 +66,29 @@ section{margin-top:22px}
 .star:hover{color:var(--fg)}
 .star.on{color:var(--pink)}
 .tag.fav{border-color:var(--pink);color:var(--pink)}
+button.tag.nothem{background:transparent;border-style:dashed;color:var(--faint);cursor:pointer;min-height:24px}
+button.tag.nothem:hover{color:var(--fg)}
+.panel.slim{padding:14px;margin:0 0 10px}
+.favhead h2{margin:0;font-size:22px;font-weight:600}
+.favhead .sub,.sub{font-size:13px;color:var(--muted);line-height:1.5;margin:6px 0 0}
+label.search{margin-top:16px}
+input[type=search]{min-height:48px;border-radius:12px;border:1px solid var(--line-strong);background:var(--surface);padding:0 14px;font-size:16px;width:100%}
+#favResults{display:flex;flex-direction:column;margin-top:6px}
+.res{display:flex;align-items:center;gap:12px;min-height:52px;padding:6px 4px;border:none;background:transparent;text-align:left;border-bottom:1px solid var(--line);width:100%}
+.res:hover{background:var(--surface)}
+.res img,.res .ph{width:36px;height:36px;border-radius:999px;object-fit:cover;flex:none;background:var(--raised)}
+.res .nm{flex:1;min-width:0;font-weight:500}
+.res .add{font-family:var(--mono);font-size:12px;color:var(--pink)}
+.res.typed .nm{font-weight:400;color:var(--muted)}
+#favList{margin-top:18px}
+.favrow{display:flex;align-items:center;gap:10px;min-height:56px;border-bottom:1px solid var(--line)}
+.favrow .st{color:var(--pink);font-size:18px;width:20px;text-align:center}
+.favrow .nm{flex:1;min-width:0}
+.favrow .nm b{display:block;font-weight:600}
+.favrow .nm span{font-size:13px;color:var(--muted)}
+.favrow .rm{width:44px;height:44px;border:none;background:transparent;color:var(--faint);font-size:18px;border-radius:999px}
+.favrow .rm:hover{color:var(--fg)}
+.filebtn{cursor:pointer;display:inline-flex;align-items:center}
 section.drive .sub{font-size:13px;color:var(--faint);margin:8px 0 0;line-height:1.45}
 .date{width:52px;flex:none;text-align:center;font-family:var(--mono);line-height:1.15;padding-top:2px}
 .date .m{font-size:11px;color:var(--muted);letter-spacing:.06em}
@@ -117,6 +140,7 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
     </div>
     <div class="row" style="flex-wrap:nowrap">
       <button class="ibtn" id="refreshBtn" title="Check again" aria-label="Check again" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
+      <button class="ibtn" id="favBtn" title="Favorites" aria-label="Favorites" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
       <button class="ibtn" id="gearBtn" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
     </div>
   </header>
@@ -127,8 +151,29 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
       <button id="segMine" aria-pressed="true">Your artists<span class="n" id="nMine"></span></button>
       <button id="segAll" aria-pressed="false">Everything<span class="n" id="nAll"></span></button>
     </div>
+    <div class="panel slim" id="reconnectBox" hidden>
+      <p><b>One more Spotify permission.</b> Concert Radar can now read the playlists you've made. Reconnect once to include them.</p>
+      <div class="row"><button class="btn small" id="reconnectBtn">Reconnect Spotify</button></div>
+    </div>
     <p class="newline" id="newLine" hidden></p>
     <div id="sections"></div>
+  </main>
+
+  <!-- favorites -->
+  <main id="favView" hidden>
+    <div class="favhead">
+      <div>
+        <h2>Favorites</h2>
+        <p class="sub">Bands you'll see no matter what. They're always on your list when they play nearby and always count for Worth the drive, however much you've played them. Same list on your phone and computer.</p>
+      </div>
+    </div>
+    <label class="search">Add an artist
+      <input type="search" id="favSearch" placeholder="Search Spotify, or type a name" autocomplete="off" spellcheck="false">
+    </label>
+    <div id="favResults"></div>
+    <p class="msg" id="favMsg"></p>
+    <div id="favList"></div>
+    <div class="row" style="margin-top:18px"><button class="btn" id="favDone">Back to my list</button></div>
   </main>
 
   <!-- setup and settings -->
@@ -164,6 +209,11 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
         <button class="btn small ghost" id="rescanBtn">Re-read my Spotify now</button>
         <button class="btn small ghost" id="disconnectBtn">Disconnect Spotify</button>
       </div>
+      <div id="historyBox" hidden>
+        <p><b>Your full listening history</b></p>
+        <p id="historyNote">Spotify only shares your last 50 plays with apps. For every artist you've ever played, request <b>Extended streaming history</b> at spotify.com → Account → Privacy (it arrives by email, usually within a few days), then add the file here. Zip or JSON both work.</p>
+        <div class="row"><label class="btn small ghost filebtn">Add history file<input type="file" id="historyFile" accept=".zip,.json,application/zip,application/json" multiple hidden></label><span class="msg" id="historyMsg"></span></div>
+      </div>
       <div id="sourcesBox" hidden>
         <p><b>Where shows come from</b></p>
         <p id="sourcesNote"></p>
@@ -179,7 +229,7 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
 (() => {
   'use strict';
   const $ = (id) => document.getElementById(id);
-  const K = { helper: 'cr.helper', shows: 'cr.shows', seen: 'cr.seen', view: 'cr.view', favs: 'cr.favs', drive: 'cr.drive' };
+  const K = { helper: 'cr.helper', shows: 'cr.shows', seen: 'cr.seen', view: 'cr.view', favs: 'cr.favs', drive: 'cr.drive', history: 'cr.history' };
   const ls = {
     get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
@@ -194,8 +244,11 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
     shows: ls.get(K.shows),
     artists: SPOT.cachedArtists(),
     view: ls.get(K.view) || 'mine',
-    favs: ls.get(K.favs) || {},            // artists you've tagged Favourite: { normName: displayName }
+    favs: ls.get(K.favs) || {},
+    noTitle: ls.get('cr.noTitle') || {},   // artists you've said "Not them" to inside show titles            // artists you've tagged Favorite: { normName: displayName }
     drive: ls.get(K.drive),                // road-trip shows for your strongest artists
+    history: ls.get(K.history),            // { artists: { normName: { name, plays } } } from your Spotify history file
+    screen: 'list',
     loadingDrive: '',
     newIds: new Set(),
     expanded: new Set(),
@@ -226,37 +279,58 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
   // Why an artist is on your radar, strongest reason first.
   function reasons(a) {
     const out = [];
-    if (a.fav) out.push({ t: 'Favourite', fav: true });
+    if (a.fav) out.push({ t: 'Favorite', fav: true });
     if (a.top) out.push({ t: 'Top artist', strong: true });
     if (a.follow) out.push({ t: 'Following', strong: true });
     if (a.liked) out.push({ t: a.liked === 1 ? 'Liked 1 song' : `Liked ${a.liked} songs`, strong: a.liked >= 5 });
+    if (a.plays >= 10) out.push({ t: `Played ${a.plays.toLocaleString()} times`, strong: a.plays >= 100 });
     if (a.rotation && !a.top) out.push({ t: 'On repeat', strong: false });
+    if (a.playlists && out.length < 2) out.push({ t: a.playlists === 1 ? 'In your playlists' : `${a.playlists} songs in your playlists`, strong: a.playlists >= 10 });
+    if (a.albums && out.length < 2) out.push({ t: a.albums === 1 ? 'Saved album' : `${a.albums} saved albums`, strong: a.albums >= 2 });
     if (a.recent && out.length < 2) out.push({ t: 'Played recently', strong: false });
+    if (a.plays && a.plays < 10 && out.length < 1) out.push({ t: a.plays === 1 ? 'Played once' : `Played ${a.plays} times`, strong: false });
     return out.slice(0, a.fav ? 3 : 2);
   }
-  const weight = (a) => (a.fav ? 200 : 0) + (a.top ? 100 : 0) + (a.follow ? 60 : 0) + Math.min(a.liked, 50) * 2 + (a.rotation ? 20 : 0) + (a.recent ? 5 : 0);
+  const weight = (a) => (a.fav ? 200 : 0) + Math.min(a.plays || 0, 300) / 3 + Math.min(a.playlists || 0, 30) + (a.albums || 0) * 10 + (a.top ? 100 : 0) + (a.follow ? 60 : 0) + Math.min(a.liked, 50) * 2 + (a.rotation ? 20 : 0) + (a.recent ? 5 : 0);
 
-  // Strong enough to drive for: tagged Favourite, a top artist, one you follow, or 10+ liked songs.
-  const strong = (a) => a.fav || a.top || a.follow || a.liked >= 10;
+  // Strong enough to drive for: tagged Favorite, a top artist, one you follow, or 10+ liked songs.
+  const strong = (a) => a.fav || a.top || a.follow || a.liked >= 10 || a.plays >= 100 || a.albums >= 2 || a.playlists >= 10;
 
-  // Your Spotify artists plus the ones you've tagged Favourite.
+  // Your Spotify artists plus the ones you've tagged Favorite.
+  const blank = (name) => ({ name, top: false, rotation: false, follow: false, liked: 0, recent: 0, albums: 0, playlists: 0, plays: 0 });
+  let mapCache = null;
   function artistMap() {
-    const base = (state.artists && state.artists.artists) || {};
-    const map = { ...base };
-    for (const [k, name] of Object.entries(state.favs)) {
-      map[k] = { ...(base[k] || { name, top: false, rotation: false, follow: false, liked: 0, recent: 0 }), fav: true };
+    const src = [state.artists, state.favs, state.history];
+    if (mapCache && mapCache.src.every((x, i) => x === src[i])) return mapCache.map;
+    const map = { ...((state.artists && state.artists.artists) || {}) };
+    for (const [k, h] of Object.entries((state.history && state.history.artists) || {})) {
+      map[k] = { ...(map[k] || blank(h.name)), plays: h.plays };
     }
+    for (const [k, name] of Object.entries(state.favs)) map[k] = { ...(map[k] || blank(name)), fav: true };
+    mapCache = { src, map };
     return map;
   }
 
-  // Ticketmaster lists every band on the bill by name, so those match exactly. Venue calendars only have a
-  // title like "APOCALYPSE MEOW featuring Roman Numerals, Jamogi…", so for those an artist matches when their
-  // whole name appears in it (names under 4 letters only match exactly, so "Low" doesn't hit "Low Cut Connie").
+  // Ticketmaster lists every band on the bill by name, so those match exactly. Venue calendars often only have a
+  // title ("APOCALYPSE MEOW featuring Roman Numerals…", "Shuffle After Midnight"), so:
+  //  - a one-word name ("Live", "Camp", "Wednesday") matches only when it IS a billed act, never inside a title;
+  //  - a longer name matches inside a title only as the whole name, "The" included ("The Midnight" ≠ "After Midnight"),
+  //    and not when it's all everyday words ("Live Band", "Comedy Night");
+  //  - and any title match can be turned off with "Not them" (kept in cr.noTitle).
+  const COMMON = new Set('a an and the of in on at to for with by from live band music night show shows tour concert club party dj djs comedy camp sonic dance karaoke trivia open mic jam session sessions presents featuring feat special guest guests family friends day days new old big little one two three after before fest festival vs x'.split(' '));
   let phraseCache = null;
   function phrases(map) {
-    if (phraseCache && phraseCache.map === map) return phraseCache.list;
-    const list = Object.keys(map).filter((k) => k.length >= 4 || k.includes(' '));
-    phraseCache = { map, list };
+    if (phraseCache && phraseCache.map === map && phraseCache.no === state.noTitle) return phraseCache.list;
+    const list = [];
+    for (const [k, a] of Object.entries(map)) {
+      if (state.noTitle[k]) continue;
+      const full = SPOT.normFull(a.name);
+      const words = full.split(' ');
+      if (words.length < 2 || full.length < 6) continue;
+      if (words.every((w) => COMMON.has(w) || /^\d+$/.test(w))) continue;
+      list.push([k, ' ' + full + ' ']);
+    }
+    phraseCache = { map, no: state.noTitle, list };
     return list;
   }
   function annotate(events, map) {
@@ -264,12 +338,12 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
       const names = e.artists && e.artists.length ? e.artists : [e.name];
       const hits = [];
       const seen = new Set();
-      const add = (k, billed) => { if (map[k] && !seen.has(k)) { seen.add(k); hits.push({ billed, a: map[k], k }); } };
+      const add = (k, billed, fromTitle) => { if (map[k] && !seen.has(k)) { seen.add(k); hits.push({ billed, a: map[k], k, fromTitle }); } };
       for (const n of names) add(SPOT.norm(n), n);
       if (!hits.length) add(SPOT.norm(e.name), e.name);
       if (e.source && e.source !== 'tm') {
-        const hay = ' ' + SPOT.norm([e.name, ...names].join(' , ')) + ' ';
-        for (const k of phrases(map)) if (!seen.has(k) && hay.includes(' ' + k + ' ')) add(k, map[k].name);
+        const hay = ' ' + SPOT.normFull([e.name, ...names].join(' , ')) + ' ';
+        for (const [k, phrase] of phrases(map)) if (!seen.has(k) && hay.includes(phrase)) add(k, map[k].name, true);
       }
       hits.sort((x, y) => weight(y.a) - weight(x.a));
       return { ...e, hits };
@@ -314,6 +388,7 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
       const label = e.hits.length > 1 || (e.artists && e.artists[0] !== h.billed) ? h.a.name + ': ' : '';
       reasons(h.a).forEach((r, i) => tags.push(`<span class="tag${r.fav ? ' fav' : r.strong ? ' strong' : ''}">${i === 0 ? esc(label) : ''}${r.fav ? '★ ' : ''}${esc(r.t)}</span>`));
       if (e.hits.length > 1) tags.push(`<span class="tag">+${e.hits.length - 1} more you know</span>`);
+      if (h.fromTitle && !h.a.fav) tags.push(`<button class="tag nothem" data-notitle="${esc(h.k)}" data-name="${esc(h.a.name)}" title="Stop matching ${esc(h.a.name)} inside show titles">Not them</button>`);
     }
     if (e.onsale) tags.push(`<span class="tag sale">On sale ${esc(saleDay(e.onsale))}</span>`);
     if (e.status === 'postponed' || e.status === 'rescheduled') tags.push(`<span class="tag off">${e.status === 'postponed' ? 'Postponed' : 'Rescheduled'}</span>`);
@@ -323,7 +398,7 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
     const cityText = drive ? [e.city, e.state].filter(Boolean).join(', ') + (e.miles ? ` · ${e.miles} mi` : '') : e.city;
     const where = [e.venue, showCity ? cityText : '', clock(e.time)].filter(Boolean).join(' · ');
     if (e.status === 'soldout') tags.push('<span class="tag off">Sold out</span>');
-    // The star tags this show's artist as a Favourite (or untags them).
+    // The star tags this show's artist as a Favorite (or untags them).
     const target = e.hits[0] ? { k: e.hits[0].k, name: e.hits[0].a.name } : { k: SPOT.norm((e.artists && e.artists[0]) || e.name), name: (e.artists && e.artists[0]) || e.name };
     const isFav = !!state.favs[target.k];
     const p2 = p.y !== new Date().getFullYear() && drive ? ` '${String(p.y).slice(2)}` : '';
@@ -332,13 +407,16 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
         <div class="date"><div class="m">${p.m}${p2}</div><div class="d">${p.d}</div><div class="w">${p.w}</div></div>
         <div class="body"><div class="who">${whoLine(e)}</div><div class="where">${esc(where)}</div>${tags.length ? `<div class="tags">${tags.join('')}</div>` : ''}</div>
       </a>
-      <button class="star${isFav ? ' on' : ''}" data-fav="${esc(target.k)}" data-name="${esc(target.name)}" aria-pressed="${isFav}" aria-label="${isFav ? 'Remove ' + esc(target.name) + ' from Favourites' : 'Tag ' + esc(target.name) + ' as a Favourite'}" title="${isFav ? 'Favourite' : 'Tag as Favourite'}">${isFav ? '★' : '+'}</button>
+      <button class="star${isFav ? ' on' : ''}" data-fav="${esc(target.k)}" data-name="${esc(target.name)}" aria-pressed="${isFav}" aria-label="${isFav ? 'Remove ' + esc(target.name) + ' from Favorites' : 'Tag ' + esc(target.name) + ' as a Favorite'}" title="${isFav ? 'Favorite' : 'Tag as Favorite'}">${isFav ? '★' : '+'}</button>
     </div>`;
   }
 
   function render() {
     if (!ready()) return;
-    $('listView').hidden = false; $('setupView').hidden = true; $('refreshBtn').hidden = false;
+    if (state.screen === 'favs') return renderFavs();
+    if (state.screen !== 'list') return;
+    $('listView').hidden = false; $('setupView').hidden = true; $('favView').hidden = true; $('refreshBtn').hidden = false; $('favBtn').hidden = false;
+    $('reconnectBox').hidden = !(SPOT.isConnected() && SPOT.needsReconnect());
     $('refreshBtn').classList.toggle('spin', state.loadingShows || !!state.loadingArtists || !!state.loadingDrive);
     renderStatus();
     const data = state.shows;
@@ -389,7 +467,7 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
     const note = state.loadingDrive ? 'Checking…' : list.length + (list.length === 1 ? ' show' : ' shows');
     return `<section class="drive">
       <div class="city"><h2>Worth the drive</h2><span class="count">${esc(note)}</span></div>
-      <p class="sub">Favourites, top artists, artists you follow and anyone you've liked 10+ songs from, playing within ${SHOWS_DRIVE_MILES} miles but skipping your cities.</p>
+      <p class="sub">Favorites, top artists, artists you follow and anyone you've liked 10+ songs from, playing within ${SHOWS_DRIVE_MILES} miles but skipping your cities.</p>
       ${list.length ? list.map((e) => showRow(e, true, true)).join('') : `<p class="none">${state.drive ? 'Nobody you love is skipping town right now.' : 'Checking after your list loads…'}</p>`}
     </section>`;
   }
@@ -443,13 +521,157 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
     finally { state.loadingDrive = ''; render(); }
   }
 
+  // ---------- Favorites (kept on the helper so every device has the same list) ----------
+  function setFavs(next) { state.favs = next; ls.set(K.favs, next); }
+  async function saveFavs() {
+    const artists = Object.values(state.favs).map((name) => ({ name }));
+    try {
+      const r = await fetch(helper() + '/favorites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ artists }) });
+      if (!r.ok) throw new Error();
+      ls.del('cr.favsUnsynced');
+    } catch { ls.set('cr.favsUnsynced', true); }
+  }
+  async function loadFavs() {
+    try {
+      const r = await fetch(helper() + '/favorites');
+      if (!r.ok) return;
+      const d = await r.json();
+      const server = {};
+      (d.artists || []).forEach((a) => { const k = SPOT.norm(a.name); if (k) server[k] = a.name; });
+      // First time on this helper, or this device changed the list while offline: this device's list wins.
+      if (ls.get('cr.favsUnsynced') || (!d.updatedAt && Object.keys(state.favs).length)) { await saveFavs(); return; }
+      setFavs(server); render();
+    } catch { /* offline: keep this device's copy */ }
+  }
   function toggleFav(k, name) {
-    if (state.favs[k]) delete state.favs[k]; else state.favs[k] = name;
-    ls.set(K.favs, state.favs);
-    phraseCache = null;
+    const next = { ...state.favs };
+    if (next[k]) delete next[k]; else next[k] = name;
+    setFavs(next);
     render();
-    // A new Favourite may have shows out of town: look them up now.
-    if (state.favs[k]) loadDrive(true);
+    saveFavs();
+    // A new Favorite may have shows out of town: look them up now.
+    if (next[k]) loadDrive(true);
+  }
+
+  // ---------- Favorites screen ----------
+  function showFavs() {
+    state.screen = 'favs';
+    $('listView').hidden = true; $('setupView').hidden = true; $('favView').hidden = false; $('refreshBtn').hidden = true;
+    renderFavs();
+    window.scrollTo(0, 0);
+  }
+  function nextShowFor(k) {
+    const today = todayISO();
+    const map = artistMap();
+    const pool = [...((state.shows && state.shows.events) || []), ...((state.drive && state.drive.events) || [])].filter((e) => e.date >= today);
+    const hit = annotate(pool, map).filter((e) => e.hits.some((h) => h.k === k)).sort((a, b) => a.date.localeCompare(b.date))[0];
+    if (!hit) return 'No shows nearby yet';
+    const p = parts(hit.date);
+    return `${p.w} ${p.m.charAt(0) + p.m.slice(1).toLowerCase()} ${p.d} · ${hit.venue}${hit.region === 'drive' || hit.miles ? ', ' + hit.city : ''}`;
+  }
+  function renderFavs() {
+    $('favView').hidden = false;
+    const list = Object.entries(state.favs).sort((a, b) => a[1].localeCompare(b[1]));
+    $('favList').innerHTML = list.length
+      ? list.map(([k, name]) => `<div class="favrow"><span class="st">★</span><div class="nm"><b>${esc(name)}</b><span>${esc(nextShowFor(k))}</span></div><button class="rm" data-unfav="${esc(k)}" aria-label="Remove ${esc(name)}">✕</button></div>`).join('')
+      : '<p class="none">No Favorites yet. Search above, or tap + on any show.</p>';
+  }
+  let searchTimer = 0, searchSeq = 0;
+  $('favSearch').addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    const q = $('favSearch').value.trim();
+    if (!q) { $('favResults').innerHTML = ''; return; }
+    searchTimer = setTimeout(async () => {
+      const seq = ++searchSeq;
+      let results = [];
+      try { results = await SPOT.searchArtists(q); } catch (e) { $('favMsg').className = 'msg bad'; $('favMsg').textContent = e.message; }
+      if (seq !== searchSeq) return;
+      const typed = results.some((r) => SPOT.norm(r.name) === SPOT.norm(q)) ? '' :
+        `<button class="res typed" data-addfav="${esc(q)}"><span class="ph"></span><span class="nm">Add “${esc(q)}” as typed</span><span class="add">+ Add</span></button>`;
+      $('favResults').innerHTML = results.map((r) => {
+        const on = !!state.favs[SPOT.norm(r.name)];
+        return `<button class="res" data-addfav="${esc(r.name)}" ${on ? 'disabled' : ''}>${r.image ? `<img src="${esc(r.image)}" alt="">` : '<span class="ph"></span>'}<span class="nm">${esc(r.name)}</span><span class="add">${on ? '★ Added' : '+ Add'}</span></button>`;
+      }).join('') + typed;
+    }, 300);
+  });
+  $('favView').addEventListener('click', (ev) => {
+    const a = ev.target.closest('[data-addfav]');
+    if (a) {
+      const name = a.dataset.addfav, k = SPOT.norm(name);
+      if (k && !state.favs[k]) toggleFav(k, name);
+      $('favSearch').value = ''; $('favResults').innerHTML = '';
+      $('favMsg').className = 'msg ok'; $('favMsg').textContent = `Added ${name}.`;
+      renderFavs(); return;
+    }
+    const r = ev.target.closest('[data-unfav]');
+    if (r) { toggleFav(r.dataset.unfav, state.favs[r.dataset.unfav]); renderFavs(); }
+  });
+  $('favDone').addEventListener('click', () => { state.screen = 'list'; $('favView').hidden = true; $('favMsg').textContent = ''; render(); window.scrollTo(0, 0); });
+  $('favBtn').addEventListener('click', showFavs);
+  $('reconnectBtn').addEventListener('click', () => SPOT.login().catch(() => {}));
+
+  // ---------- full listening history (Spotify's Extended streaming history file) ----------
+  async function loadZipLib() {
+    if (window.JSZip) return window.JSZip;
+    await new Promise((ok, bad) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'; sc.onload = ok; sc.onerror = bad; document.head.append(sc); });
+    return window.JSZip;
+  }
+  async function readHistoryFiles(files) {
+    const texts = [];
+    for (const f of files) {
+      if (/\.zip$/i.test(f.name)) {
+        const zip = await (await loadZipLib()).loadAsync(f);
+        for (const entry of Object.values(zip.files)) {
+          if (!entry.dir && /(Streaming_History_Audio|StreamingHistory_music|StreamingHistory\d)[^/]*\.json$/i.test(entry.name)) texts.push(await entry.async('string'));
+        }
+      } else texts.push(await f.text());
+    }
+    const artists = {};
+    let from = null, to = null, plays = 0;
+    for (const t of texts) {
+      let rows; try { rows = JSON.parse(t); } catch { continue; }
+      if (!Array.isArray(rows)) continue;
+      for (const r of rows) {
+        const name = r.master_metadata_album_artist_name || r.artistName;
+        const ms = r.ms_played ?? r.msPlayed ?? 0;
+        if (!name || ms < 30000) continue; // a play counts after 30 seconds, like Spotify's own counts
+        const k = SPOT.norm(name); if (!k) continue;
+        (artists[k] || (artists[k] = { name, plays: 0 })).plays++;
+        plays++;
+        const when = (r.ts || r.endTime || '').slice(0, 10);
+        if (when) { if (!from || when < from) from = when; if (!to || when > to) to = when; }
+      }
+    }
+    return { artists, from, to, plays };
+  }
+  $('historyFile').addEventListener('change', async (ev) => {
+    const files = [...ev.target.files]; ev.target.value = '';
+    if (!files.length) return;
+    const m = $('historyMsg'); m.className = 'msg'; m.textContent = 'Reading…';
+    try {
+      const h = await readHistoryFiles(files);
+      const n = Object.keys(h.artists).length;
+      if (!n) { m.className = 'msg bad'; m.textContent = 'No listening found in that file. Use the Extended streaming history download.'; return; }
+      state.history = { artists: h.artists, from: h.from, to: h.to, updatedAt: new Date().toISOString() };
+      ls.set(K.history, state.history);
+      m.className = 'msg ok'; m.textContent = `${h.plays.toLocaleString()} plays of ${n.toLocaleString()} artists${h.from ? `, ${h.from.slice(0, 4)}–${h.to.slice(0, 4)}` : ''}. Saving…`;
+      const r = await fetch(helper() + '/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ artists: h.artists, from: h.from, to: h.to }) }).catch(() => null);
+      m.textContent = m.textContent.replace('Saving…', r && r.ok ? 'Saved for all your devices.' : 'Saved on this device (the helper didn’t answer).');
+      historyNote(); loadDrive(true);
+    } catch (e) { m.className = 'msg bad'; m.textContent = 'Couldn’t read that file: ' + e.message; }
+  });
+  async function loadHistory() {
+    try {
+      const r = await fetch(helper() + '/history');
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.updatedAt && (!state.history || d.updatedAt > (state.history.updatedAt || ''))) { state.history = d; ls.set(K.history, d); render(); }
+    } catch {}
+  }
+  function historyNote() {
+    const h = state.history;
+    if (!h || !h.artists) return;
+    $('historyNote').innerHTML = `Added: ${Object.keys(h.artists).length.toLocaleString()} artists${h.from ? ` from ${esc(h.from.slice(0, 4))}–${esc(h.to.slice(0, 4))}` : ''}. Add a newer file any time to replace it.`;
   }
 
   async function loadArtists(force) {
@@ -467,7 +689,9 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
 
   // ---------- setup ----------
   function showSetup(asSettings) {
-    $('listView').hidden = true; $('setupView').hidden = false; $('refreshBtn').hidden = true;
+    state.screen = 'setup';
+    $('listView').hidden = true; $('favView').hidden = true; $('setupView').hidden = false; $('refreshBtn').hidden = true; $('favBtn').hidden = !ready();
+    $('historyBox').hidden = !ready(); historyNote();
     $('setupTitle').textContent = asSettings ? 'Settings' : 'Set up Concert Radar';
     $('setupIntro').hidden = asSettings;
     $('helperInput').value = helper();
@@ -525,6 +749,8 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
   $('segMine').addEventListener('click', () => { state.view = 'mine'; ls.set(K.view, 'mine'); render(); });
   $('segAll').addEventListener('click', () => { state.view = 'all'; ls.set(K.view, 'all'); render(); });
   $('sections').addEventListener('click', (ev) => {
+    const nt = ev.target.closest('[data-notitle]');
+    if (nt) { ev.preventDefault(); ev.stopPropagation(); state.noTitle = { ...state.noTitle, [nt.dataset.notitle]: nt.dataset.name }; ls.set('cr.noTitle', state.noTitle); render(); return; }
     const f = ev.target.closest('[data-fav]');
     if (f) { ev.preventDefault(); toggleFav(f.dataset.fav, f.dataset.name); return; }
     const b = ev.target.closest('[data-expand]'); if (!b) return;
@@ -534,14 +760,21 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
 
   function openList() {
     if (!ready()) return showSetup(false);
+    state.screen = 'list';
     render();
     loadShows(false);
     loadArtists(false);
+    loadFavs();
+    loadHistory();
   }
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   if (location.hash === '#settings') showSetup(true);
-  else { if (location.hash === '#connected') history.replaceState(null, '', location.pathname); openList(); }
+  else {
+    const justConnected = location.hash === '#connected';
+    if (justConnected) history.replaceState(null, '', location.pathname);
+    openList();
+  }
   // Coming back to the app after a while: freshen quietly.
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && ready() && !$('listView').hidden && state.shows && Date.now() - Date.parse(state.shows.updatedAt) > 6 * 3600000) loadShows(false);
