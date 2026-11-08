@@ -59,8 +59,14 @@ section{margin-top:22px}
 .more{width:100%;min-height:44px;margin-top:6px;border:1px solid var(--line);background:transparent;border-radius:10px;font-size:14px;color:var(--muted)}
 
 /* a show */
-.show{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--line);text-decoration:none;align-items:flex-start}
-.show:active{background:var(--surface)}
+.show{display:flex;gap:4px;border-bottom:1px solid var(--line);align-items:flex-start}
+.show .link{flex:1;min-width:0;display:flex;gap:14px;padding:14px 0;text-decoration:none;align-items:flex-start}
+.show .link:active{background:var(--surface)}
+.star{width:44px;height:44px;flex:none;margin-top:8px;border:none;background:transparent;border-radius:999px;color:var(--faint);font-size:20px;line-height:1;display:flex;align-items:center;justify-content:center}
+.star:hover{color:var(--fg)}
+.star.on{color:var(--pink)}
+.tag.fav{border-color:var(--pink);color:var(--pink)}
+section.drive .sub{font-size:13px;color:var(--faint);margin:8px 0 0;line-height:1.45}
 .date{width:52px;flex:none;text-align:center;font-family:var(--mono);line-height:1.15;padding-top:2px}
 .date .m{font-size:11px;color:var(--muted);letter-spacing:.06em}
 .date .d{font-size:24px;font-weight:500}
@@ -158,6 +164,10 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
         <button class="btn small ghost" id="rescanBtn">Re-read my Spotify now</button>
         <button class="btn small ghost" id="disconnectBtn">Disconnect Spotify</button>
       </div>
+      <div id="sourcesBox" hidden>
+        <p><b>Where shows come from</b></p>
+        <p id="sourcesNote"></p>
+      </div>
       <div class="row" id="doneRow" hidden><button class="btn" id="doneBtn">Show my list</button></div>
     </div>
   </main>
@@ -169,7 +179,7 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
 (() => {
   'use strict';
   const $ = (id) => document.getElementById(id);
-  const K = { helper: 'cr.helper', shows: 'cr.shows', seen: 'cr.seen', view: 'cr.view' };
+  const K = { helper: 'cr.helper', shows: 'cr.shows', seen: 'cr.seen', view: 'cr.view', favs: 'cr.favs', drive: 'cr.drive' };
   const ls = {
     get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
@@ -177,12 +187,16 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
   };
   const ARTISTS_MAX_AGE = 20 * 3600000;
   const SHOWS_MAX_AGE = 20 * 3600000;
+  const SHOWS_DRIVE_MILES = 300;
   const PREVIEW = 8; // shows per city before "Show all" in Everything
 
   const state = {
     shows: ls.get(K.shows),
     artists: SPOT.cachedArtists(),
     view: ls.get(K.view) || 'mine',
+    favs: ls.get(K.favs) || {},            // artists you've tagged Favourite: { normName: displayName }
+    drive: ls.get(K.drive),                // road-trip shows for your strongest artists
+    loadingDrive: '',
     newIds: new Set(),
     expanded: new Set(),
     loadingShows: false, loadingArtists: '', error: ''
@@ -212,22 +226,51 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
   // Why an artist is on your radar, strongest reason first.
   function reasons(a) {
     const out = [];
+    if (a.fav) out.push({ t: 'Favourite', fav: true });
     if (a.top) out.push({ t: 'Top artist', strong: true });
     if (a.follow) out.push({ t: 'Following', strong: true });
     if (a.liked) out.push({ t: a.liked === 1 ? 'Liked 1 song' : `Liked ${a.liked} songs`, strong: a.liked >= 5 });
     if (a.rotation && !a.top) out.push({ t: 'On repeat', strong: false });
     if (a.recent && out.length < 2) out.push({ t: 'Played recently', strong: false });
-    return out.slice(0, 2);
+    return out.slice(0, a.fav ? 3 : 2);
   }
-  const weight = (a) => (a.top ? 100 : 0) + (a.follow ? 60 : 0) + Math.min(a.liked, 50) * 2 + (a.rotation ? 20 : 0) + (a.recent ? 5 : 0);
+  const weight = (a) => (a.fav ? 200 : 0) + (a.top ? 100 : 0) + (a.follow ? 60 : 0) + Math.min(a.liked, 50) * 2 + (a.rotation ? 20 : 0) + (a.recent ? 5 : 0);
 
-  function annotate(events, artistMap) {
-    const map = artistMap || {};
+  // Strong enough to drive for: tagged Favourite, a top artist, one you follow, or 10+ liked songs.
+  const strong = (a) => a.fav || a.top || a.follow || a.liked >= 10;
+
+  // Your Spotify artists plus the ones you've tagged Favourite.
+  function artistMap() {
+    const base = (state.artists && state.artists.artists) || {};
+    const map = { ...base };
+    for (const [k, name] of Object.entries(state.favs)) {
+      map[k] = { ...(base[k] || { name, top: false, rotation: false, follow: false, liked: 0, recent: 0 }), fav: true };
+    }
+    return map;
+  }
+
+  // Ticketmaster lists every band on the bill by name, so those match exactly. Venue calendars only have a
+  // title like "APOCALYPSE MEOW featuring Roman Numerals, Jamogi…", so for those an artist matches when their
+  // whole name appears in it (names under 4 letters only match exactly, so "Low" doesn't hit "Low Cut Connie").
+  let phraseCache = null;
+  function phrases(map) {
+    if (phraseCache && phraseCache.map === map) return phraseCache.list;
+    const list = Object.keys(map).filter((k) => k.length >= 4 || k.includes(' '));
+    phraseCache = { map, list };
+    return list;
+  }
+  function annotate(events, map) {
     return events.map((e) => {
       const names = e.artists && e.artists.length ? e.artists : [e.name];
       const hits = [];
-      for (const n of names) { const a = map[SPOT.norm(n)]; if (a) hits.push({ billed: n, a }); }
-      if (!hits.length && e.artists && e.artists.length) { const a = map[SPOT.norm(e.name)]; if (a) hits.push({ billed: e.name, a }); }
+      const seen = new Set();
+      const add = (k, billed) => { if (map[k] && !seen.has(k)) { seen.add(k); hits.push({ billed, a: map[k], k }); } };
+      for (const n of names) add(SPOT.norm(n), n);
+      if (!hits.length) add(SPOT.norm(e.name), e.name);
+      if (e.source && e.source !== 'tm') {
+        const hay = ' ' + SPOT.norm([e.name, ...names].join(' , ')) + ' ';
+        for (const k of phrases(map)) if (!seen.has(k) && hay.includes(' ' + k + ' ')) add(k, map[k].name);
+      }
       hits.sort((x, y) => weight(y.a) - weight(x.a));
       return { ...e, hits };
     });
@@ -262,38 +305,49 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
     return html;
   }
 
-  function showRow(e, mine) {
+  function showRow(e, mine, drive) {
     const p = parts(e.date);
     const tags = [];
     if (state.newIds.has(e.id)) tags.push('<span class="tag new">New</span>');
     if (e.hits.length) {
       const h = e.hits[0];
       const label = e.hits.length > 1 || (e.artists && e.artists[0] !== h.billed) ? h.a.name + ': ' : '';
-      reasons(h.a).forEach((r, i) => tags.push(`<span class="tag${r.strong ? ' strong' : ''}">${i === 0 ? esc(label) : ''}${esc(r.t)}</span>`));
+      reasons(h.a).forEach((r, i) => tags.push(`<span class="tag${r.fav ? ' fav' : r.strong ? ' strong' : ''}">${i === 0 ? esc(label) : ''}${r.fav ? '★ ' : ''}${esc(r.t)}</span>`));
       if (e.hits.length > 1) tags.push(`<span class="tag">+${e.hits.length - 1} more you know</span>`);
     }
     if (e.onsale) tags.push(`<span class="tag sale">On sale ${esc(saleDay(e.onsale))}</span>`);
     if (e.status === 'postponed' || e.status === 'rescheduled') tags.push(`<span class="tag off">${e.status === 'postponed' ? 'Postponed' : 'Rescheduled'}</span>`);
     // The city only when it isn't the section's city (Overland Park under Kansas City, say).
     const regionName = ((state.shows && state.shows.regions) || []).find((r) => r.id === e.region)?.name || '';
-    const showCity = e.city && e.city !== e.venue && SPOT.norm(e.city) !== SPOT.norm(regionName);
-    const where = [e.venue, showCity ? e.city : '', clock(e.time)].filter(Boolean).join(' · ');
-    return `<a class="show${!mine && !e.hits.length ? ' dim' : ''}" href="${esc(e.url)}" target="_blank" rel="noopener">
-      <div class="date"><div class="m">${p.m}</div><div class="d">${p.d}</div><div class="w">${p.w}</div></div>
-      <div class="body"><div class="who">${whoLine(e)}</div><div class="where">${esc(where)}</div>${tags.length ? `<div class="tags">${tags.join('')}</div>` : ''}</div>
-    </a>`;
+    const showCity = drive || (e.city && e.city !== e.venue && SPOT.norm(e.city) !== SPOT.norm(regionName));
+    const cityText = drive ? [e.city, e.state].filter(Boolean).join(', ') + (e.miles ? ` · ${e.miles} mi` : '') : e.city;
+    const where = [e.venue, showCity ? cityText : '', clock(e.time)].filter(Boolean).join(' · ');
+    if (e.status === 'soldout') tags.push('<span class="tag off">Sold out</span>');
+    // The star tags this show's artist as a Favourite (or untags them).
+    const target = e.hits[0] ? { k: e.hits[0].k, name: e.hits[0].a.name } : { k: SPOT.norm((e.artists && e.artists[0]) || e.name), name: (e.artists && e.artists[0]) || e.name };
+    const isFav = !!state.favs[target.k];
+    const p2 = p.y !== new Date().getFullYear() && drive ? ` '${String(p.y).slice(2)}` : '';
+    return `<div class="show${!mine && !e.hits.length ? ' dim' : ''}">
+      <a class="link" href="${esc(e.url)}" target="_blank" rel="noopener">
+        <div class="date"><div class="m">${p.m}${p2}</div><div class="d">${p.d}</div><div class="w">${p.w}</div></div>
+        <div class="body"><div class="who">${whoLine(e)}</div><div class="where">${esc(where)}</div>${tags.length ? `<div class="tags">${tags.join('')}</div>` : ''}</div>
+      </a>
+      <button class="star${isFav ? ' on' : ''}" data-fav="${esc(target.k)}" data-name="${esc(target.name)}" aria-pressed="${isFav}" aria-label="${isFav ? 'Remove ' + esc(target.name) + ' from Favourites' : 'Tag ' + esc(target.name) + ' as a Favourite'}" title="${isFav ? 'Favourite' : 'Tag as Favourite'}">${isFav ? '★' : '+'}</button>
+    </div>`;
   }
 
   function render() {
     if (!ready()) return;
     $('listView').hidden = false; $('setupView').hidden = true; $('refreshBtn').hidden = false;
-    $('refreshBtn').classList.toggle('spin', state.loadingShows || !!state.loadingArtists);
+    $('refreshBtn').classList.toggle('spin', state.loadingShows || !!state.loadingArtists || !!state.loadingDrive);
     renderStatus();
     const data = state.shows;
     if (!data) { $('sections').innerHTML = state.loadingShows ? '<p class="none">Checking for shows…</p>' : ''; return; }
 
     const today = todayISO();
-    const all = dedupe(annotate((data.events || []).filter((e) => e.date >= today), state.artists && state.artists.artists));
+    const map = artistMap();
+    const upcoming = (data.events || []).filter((e) => e.date >= today);
+    const all = dedupe(annotate(upcoming.filter((e) => e.region !== 'drive'), map));
     const mine = all.filter((e) => e.hits.length);
     $('nMine').textContent = state.artists ? mine.length : '…';
     $('nAll').textContent = all.length;
@@ -317,7 +371,27 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
         ${items.length ? visible.map((e) => showRow(e, state.view === 'mine')).join('') : `<p class="none">${empty}</p>`}
         ${!open && items.length > PREVIEW ? `<button class="more" data-expand="${esc(r.id)}">Show all ${items.length}</button>` : ''}
       </section>`;
-    }).join('');
+    }).join('') + driveSection(upcoming, mine, map, today);
+  }
+
+  // Worth the drive: your strongest artists playing within a few hours who aren't coming to your cities.
+  function driveSection(upcoming, mine, map, today) {
+    if (!state.artists) return '';
+    const local = new Set(mine.flatMap((e) => e.hits.map((h) => h.k)));
+    const pool = [...upcoming.filter((e) => e.region === 'drive'), ...((state.drive && state.drive.events) || []).filter((e) => e.date >= today)];
+    const shows = dedupe(annotate(pool, map))
+      .map((e) => ({ ...e, hits: e.hits.filter((h) => strong(h.a) && !local.has(h.k)) }))
+      .filter((e) => e.hits.length)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    // Up to two dates per artist, so one long tour doesn't fill the section.
+    const per = new Map();
+    const list = shows.filter((e) => { const k = e.hits[0].k; const n = per.get(k) || 0; per.set(k, n + 1); return n < 2; });
+    const note = state.loadingDrive ? 'Checking…' : list.length + (list.length === 1 ? ' show' : ' shows');
+    return `<section class="drive">
+      <div class="city"><h2>Worth the drive</h2><span class="count">${esc(note)}</span></div>
+      <p class="sub">Favourites, top artists, artists you follow and anyone you've liked 10+ songs from, playing within ${SHOWS_DRIVE_MILES} miles but skipping your cities.</p>
+      ${list.length ? list.map((e) => showRow(e, true, true)).join('') : `<p class="none">${state.drive ? 'Nobody you love is skipping town right now.' : 'Checking after your list loads…'}</p>`}
+    </section>`;
   }
 
   function renderStatus() {
@@ -325,6 +399,7 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
     if (state.error) bits.push(`<span class="warn">${esc(state.error)}</span>`);
     else if (state.loadingShows) bits.push(esc(state.loadingShowsMsg || 'Checking for shows') + '…');
     else if (state.loadingArtists) bits.push(esc(state.loadingArtists) + '…');
+    else if (state.loadingDrive) bits.push(esc(state.loadingDrive) + '…');
     else {
       if (state.shows) bits.push('Shows checked ' + esc(ago(state.shows.updatedAt)));
       if (state.artists) bits.push(Object.keys(state.artists.artists).length.toLocaleString() + ' artists');
@@ -350,7 +425,31 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
       state.shows = data; ls.set(K.shows, data); state.error = '';
     } catch (e) {
       state.error = state.shows ? 'Couldn’t check for new shows; showing the last list' : e.message;
-    } finally { state.loadingShows = false; state.loadingShowsMsg = ''; render(); }
+    } finally { state.loadingShows = false; state.loadingShowsMsg = ''; render(); loadDrive(false); }
+  }
+
+  async function loadDrive(force) {
+    const c = state.drive;
+    if (state.loadingDrive || !state.artists || !state.shows) return;
+    if (!force && c && Date.now() - Date.parse(c.updatedAt) < SHOWS_MAX_AGE) return;
+    const map = artistMap();
+    const names = Object.entries(map).filter(([, a]) => strong(a)).sort((x, y) => weight(y[1]) - weight(x[1])).map(([, a]) => a.name);
+    if (!names.length) return;
+    state.loadingDrive = 'Checking road trips'; render();
+    try {
+      state.drive = await SHOWS.driveScan(helper(), names, (m) => { state.loadingDrive = m; renderStatus(); });
+      ls.set(K.drive, state.drive);
+    } catch { /* road trips are a bonus; the main list still stands */ }
+    finally { state.loadingDrive = ''; render(); }
+  }
+
+  function toggleFav(k, name) {
+    if (state.favs[k]) delete state.favs[k]; else state.favs[k] = name;
+    ls.set(K.favs, state.favs);
+    phraseCache = null;
+    render();
+    // A new Favourite may have shows out of town: look them up now.
+    if (state.favs[k]) loadDrive(true);
   }
 
   async function loadArtists(force) {
@@ -363,7 +462,7 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
     } catch (e) {
       if (e.code === 'not_connected') { state.loadingArtists = ''; return showSetup(false); }
       state.error = e.message;
-    } finally { state.loadingArtists = ''; render(); }
+    } finally { state.loadingArtists = ''; render(); loadDrive(false); }
   }
 
   // ---------- setup ----------
@@ -379,6 +478,10 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
     syncSteps();
     $('settingsExtras').hidden = !SPOT.isConnected();
     $('doneRow').hidden = !ready();
+    const src = state.shows && state.shows.sources;
+    $('sourcesBox').hidden = !src;
+    if (src) $('sourcesNote').innerHTML = 'Ticketmaster for every venue around Lawrence, KC and Topeka, plus these calendars: ' +
+      Object.values(src).map((v) => v.error ? `${esc(v.name)} <span style="color:var(--warn)">(couldn’t read)</span>` : `${esc(v.name)} (${v.count})`).join(', ') + '.';
     renderStatus();
   }
   function syncSteps() {
@@ -422,10 +525,12 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
   $('segMine').addEventListener('click', () => { state.view = 'mine'; ls.set(K.view, 'mine'); render(); });
   $('segAll').addEventListener('click', () => { state.view = 'all'; ls.set(K.view, 'all'); render(); });
   $('sections').addEventListener('click', (ev) => {
+    const f = ev.target.closest('[data-fav]');
+    if (f) { ev.preventDefault(); toggleFav(f.dataset.fav, f.dataset.name); return; }
     const b = ev.target.closest('[data-expand]'); if (!b) return;
     state.expanded.add(b.dataset.expand); render();
   });
-  $('refreshBtn').addEventListener('click', () => { loadShows(true); loadArtists(true); });
+  $('refreshBtn').addEventListener('click', async () => { await Promise.all([loadShows(true), loadArtists(true)]); loadDrive(true); });
 
   function openList() {
     if (!ready()) return showSetup(false);

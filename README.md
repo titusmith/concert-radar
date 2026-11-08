@@ -5,6 +5,9 @@ A quick-glance list of upcoming shows near you by artists you actually listen to
 - **Cities, in priority order:** Lawrence, Kansas City, Topeka. Edit `REGIONS` in `shows.js` to change them or their radius.
 - **Your artists:** read from Spotify: top artists and songs, artists you follow, recently played, and every artist on your Liked Songs (counted). Each show says why it's there: *Top artist*, *Following*, *Liked 3 songs*, *On repeat*, *Played recently*.
 - **Everything:** every music show in your cities, with yours highlighted.
+- **Venue calendars:** shows sold outside Ticketmaster are read from the venues' own sites: the Bottleneck, the Granada, the Midland, the Truman, recordBar, Warehouse on Broadway, and the Cotillion (Wichita, road trips only). Add or change them in `VENUES` in both `helper/worker.js` and `shows.js`.
+- **Favourite:** tap **+** on any show to tag that artist as a Favourite (★). Favourites are saved on each device.
+- **Worth the drive:** Favourites, top artists, artists you follow and anyone you've liked 10+ songs from, playing within 300 miles of Lawrence but not coming to Lawrence, KC or Topeka.
 - **New** marks shows that appeared since you last looked. **On sale …** shows when tickets aren't on sale yet.
 - Tap a show to open it on Ticketmaster.
 
@@ -35,4 +38,4 @@ Sign-in uses Authorization Code with PKCE (no client secret). Spotify's 2026 Dev
 
 ## What it doesn't catch (yet)
 
-Only shows sold through Ticketmaster (and its partners) are listed, so some small-venue shows on other ticketing sites won't appear. A second source can be added in `shows.js` later.
+Venues not on Ticketmaster and not in the venue list above (Grinders' eTix shows, for example). Settings lists each calendar and whether it was read.
