@@ -32,7 +32,8 @@ a{color:inherit}
 
 /* header */
 header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:4px 0 14px}
-h1{margin:0;font-size:26px;font-weight:600;letter-spacing:-.01em;display:flex;align-items:center;gap:10px}
+h1{margin:0;font-size:26px;font-weight:600;letter-spacing:-.01em;display:flex;align-items:center;gap:10px;white-space:nowrap}
+@media (max-width:420px){h1{font-size:21px;gap:8px}header .ibtn{width:40px;height:40px}header .row{gap:6px}}
 .mark{width:22px;height:22px;flex:none}
 .ibtn{width:44px;height:44px;flex:none;border-radius:999px;border:1px solid var(--line-strong);background:transparent;display:flex;align-items:center;justify-content:center}
 .ibtn:active{background:var(--surface)}
@@ -59,10 +60,25 @@ section{margin-top:22px}
 .more{width:100%;min-height:44px;margin-top:6px;border:1px solid var(--line);background:transparent;border-radius:10px;font-size:14px;color:var(--muted)}
 
 /* a show */
-.show{display:flex;gap:4px;border-bottom:1px solid var(--line);align-items:flex-start}
+.show{position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
+.show .inner{display:flex;gap:4px;align-items:flex-start;background:var(--bg);position:relative;transition:transform .2s ease}
+.swipebg{position:absolute;inset:0;display:flex;align-items:center;justify-content:flex-end;padding-right:24px;background:var(--raised);color:var(--muted);font-weight:600;font-size:15px}
+.show.armed .swipebg{background:var(--bad);color:#1A0605}
+.acts{display:flex;flex-direction:column;align-items:center;flex:none;padding-top:8px}
+.more-btn{width:44px;height:36px;border:none;background:transparent;color:var(--faint);font-size:20px;line-height:1;border-radius:999px}
+.more-btn:hover{color:var(--fg)}
+.show.hiddenrow .link{opacity:.55}
+.menu{position:fixed;z-index:20;background:var(--raised);border:1px solid var(--line-strong);border-radius:12px;padding:6px;box-shadow:0 12px 32px rgba(0,0,0,.5);display:flex;flex-direction:column}
+.menu button{min-height:44px;text-align:left;padding:0 12px;border:none;background:transparent;border-radius:8px;font-size:15px}
+.menu button:hover,.menu button:focus-visible{background:var(--surface)}
+#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 20px);transform:translate(-50%,140%);transition:transform .2s ease;z-index:30;display:flex;align-items:center;gap:14px;max-width:calc(100vw - 32px);background:var(--fg);color:var(--bg);border-radius:12px;padding:10px 10px 10px 16px;font-size:14px}
+#toast.show{transform:translate(-50%,0)}
+#toast span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#toast button{min-height:36px;border:none;background:transparent;color:var(--pink-ink);font-weight:600;padding:0 10px;border-radius:8px;background:var(--pink)}
+.hidetoggle{margin-top:22px}
 .show .link{flex:1;min-width:0;display:flex;gap:14px;padding:14px 0;text-decoration:none;align-items:flex-start}
 .show .link:active{background:var(--surface)}
-.star{width:44px;height:44px;flex:none;margin-top:8px;border:none;background:transparent;border-radius:999px;color:var(--faint);font-size:20px;line-height:1;display:flex;align-items:center;justify-content:center}
+.star{width:44px;height:40px;flex:none;border:none;background:transparent;border-radius:999px;color:var(--faint);font-size:20px;line-height:1;display:flex;align-items:center;justify-content:center}
 .star:hover{color:var(--fg)}
 .star.on{color:var(--pink)}
 .tag.fav{border-color:var(--pink);color:var(--pink)}
@@ -214,6 +230,11 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
         <p id="historyNote">Spotify only shares your last 50 plays with apps. For every artist you've ever played, request <b>Extended streaming history</b> at spotify.com → Account → Privacy (it arrives by email, usually within a few days), then add the file here. Zip or JSON both work.</p>
         <div class="row"><label class="btn small ghost filebtn">Add history file<input type="file" id="historyFile" accept=".zip,.json,application/zip,application/json" multiple hidden></label><span class="msg" id="historyMsg"></span></div>
       </div>
+      <div id="notInterestedBox" hidden>
+        <p><b>Not interested</b></p>
+        <p class="fine">Artists you've hidden. Their shows only appear with “Show hidden shows” on.</p>
+        <div id="notInterestedList"></div>
+      </div>
       <div id="sourcesBox" hidden>
         <p><b>Where shows come from</b></p>
         <p id="sourcesNote"></p>
@@ -245,7 +266,9 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
     artists: SPOT.cachedArtists(),
     view: ls.get(K.view) || 'mine',
     favs: ls.get(K.favs) || {},
-    noTitle: ls.get('cr.noTitle') || {},   // artists you've said "Not them" to inside show titles            // artists you've tagged Favorite: { normName: displayName }
+    noTitle: ls.get('cr.noTitle') || {},
+    hidden: ls.get('cr.hidden') || { shows: {}, artists: {} },  // shows you've hidden (by id) and artists you're not interested in
+    showHidden: false,   // artists you've said "Not them" to inside show titles            // artists you've tagged Favorite: { normName: displayName }
     drive: ls.get(K.drive),                // road-trip shows for your strongest artists
     history: ls.get(K.history),            // { artists: { normName: { name, plays } } } from your Spotify history file
     screen: 'list',
@@ -402,12 +425,20 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
     const target = e.hits[0] ? { k: e.hits[0].k, name: e.hits[0].a.name } : { k: SPOT.norm((e.artists && e.artists[0]) || e.name), name: (e.artists && e.artists[0]) || e.name };
     const isFav = !!state.favs[target.k];
     const p2 = p.y !== new Date().getFullYear() && drive ? ` '${String(p.y).slice(2)}` : '';
-    return `<div class="show${!mine && !e.hits.length ? ' dim' : ''}">
-      <a class="link" href="${esc(e.url)}" target="_blank" rel="noopener">
-        <div class="date"><div class="m">${p.m}${p2}</div><div class="d">${p.d}</div><div class="w">${p.w}</div></div>
-        <div class="body"><div class="who">${whoLine(e)}</div><div class="where">${esc(where)}</div>${tags.length ? `<div class="tags">${tags.join('')}</div>` : ''}</div>
-      </a>
-      <button class="star${isFav ? ' on' : ''}" data-fav="${esc(target.k)}" data-name="${esc(target.name)}" aria-pressed="${isFav}" aria-label="${isFav ? 'Remove ' + esc(target.name) + ' from Favorites' : 'Tag ' + esc(target.name) + ' as a Favorite'}" title="${isFav ? 'Favorite' : 'Tag as Favorite'}">${isFav ? '★' : '+'}</button>
+    if (e.hiddenWhy) tags.unshift(`<span class="tag off">${e.hiddenWhy === 'show' ? 'Hidden' : 'Not interested'}</span><button class="tag nothem" data-unhide="${esc(e.id)}">Unhide</button>`);
+    rowIndex.set(e.id, { e, target });
+    return `<div class="show${!mine && !e.hits.length ? ' dim' : ''}${e.hiddenWhy ? ' hiddenrow' : ''}" data-id="${esc(e.id)}">
+      <div class="swipebg" aria-hidden="true">Hide</div>
+      <div class="inner">
+        <a class="link" href="${esc(e.url)}" target="_blank" rel="noopener">
+          <div class="date"><div class="m">${p.m}${p2}</div><div class="d">${p.d}</div><div class="w">${p.w}</div></div>
+          <div class="body"><div class="who">${whoLine(e)}</div><div class="where">${esc(where)}</div>${tags.length ? `<div class="tags">${tags.join('')}</div>` : ''}</div>
+        </a>
+        <div class="acts">
+          <button class="star${isFav ? ' on' : ''}" data-fav="${esc(target.k)}" data-name="${esc(target.name)}" aria-pressed="${isFav}" aria-label="${isFav ? 'Remove ' + esc(target.name) + ' from Favorites' : 'Tag ' + esc(target.name) + ' as a Favorite'}" title="${isFav ? 'Favorite' : 'Tag as Favorite'}">${isFav ? '★' : '+'}</button>
+          <button class="more-btn" data-menu="${esc(e.id)}" aria-label="More for this show" aria-haspopup="menu" title="Hide…">⋯</button>
+        </div>
+      </div>
     </div>`;
   }
 
@@ -425,14 +456,19 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
     const today = todayISO();
     const map = artistMap();
     const upcoming = (data.events || []).filter((e) => e.date >= today);
-    const all = dedupe(annotate(upcoming.filter((e) => e.region !== 'drive'), map));
-    const mine = all.filter((e) => e.hits.length);
-    $('nMine').textContent = state.artists ? mine.length : '…';
-    $('nAll').textContent = all.length;
+    rowIndex.clear();
+    const allWithHidden = markHidden(dedupe(annotate(upcoming.filter((e) => e.region !== 'drive'), map)));
+    const mineWithHidden = allWithHidden.filter((e) => e.hits.length);
+    const vis = (e) => !e.hiddenWhy || state.showHidden;
+    const all = allWithHidden.filter(vis);
+    const mine = mineWithHidden.filter(vis);
+    const hiddenCount = (state.view === 'mine' ? mineWithHidden : allWithHidden).filter((e) => e.hiddenWhy).length;
+    $('nMine').textContent = state.artists ? mineWithHidden.filter((e) => !e.hiddenWhy).length : '…';
+    $('nAll').textContent = allWithHidden.filter((e) => !e.hiddenWhy).length;
     $('segMine').setAttribute('aria-pressed', state.view === 'mine');
     $('segAll').setAttribute('aria-pressed', state.view === 'all');
 
-    const newMine = mine.filter((e) => state.newIds.has(e.id)).length;
+    const newMine = mine.filter((e) => state.newIds.has(e.id) && !e.hiddenWhy).length;
     $('newLine').hidden = !newMine;
     $('newLine').textContent = newMine === 1 ? '1 new show from your artists since you last looked' : `${newMine} new shows from your artists since you last looked`;
 
@@ -449,17 +485,135 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
         ${items.length ? visible.map((e) => showRow(e, state.view === 'mine')).join('') : `<p class="none">${empty}</p>`}
         ${!open && items.length > PREVIEW ? `<button class="more" data-expand="${esc(r.id)}">Show all ${items.length}</button>` : ''}
       </section>`;
-    }).join('') + driveSection(upcoming, mine, map, today);
+    }).join('') + driveSection(upcoming, mineWithHidden.filter((e) => !e.hiddenWhy), map, today) +
+      (hiddenCount || state.showHidden ? `<button class="more hidetoggle" id="hiddenToggle" aria-pressed="${state.showHidden}">${state.showHidden ? 'Hide the hidden shows again' : `Show hidden shows (${hiddenCount})`}</button>` : '');
   }
+
+  // ---------- hiding ----------
+  const rowIndex = new Map(); // show id → { e, target } for the ⋯ menu and swipes
+  // Why a show is hidden: you hid that night ('show'), or every artist you know on it is one you're not interested in ('artist').
+  function markHidden(list) {
+    const H = state.hidden;
+    return list.map((e) => {
+      let why = H.shows[e.id] ? 'show' : '';
+      if (!why) {
+        const keys = e.hits.length ? e.hits.filter((h) => !h.a.fav).map((h) => h.k) : [SPOT.norm((e.artists && e.artists[0]) || e.name)];
+        if (keys.length && keys.length === (e.hits.length || 1) && keys.every((k) => H.artists[k])) why = 'artist';
+      }
+      return why ? { ...e, hiddenWhy: why } : e;
+    });
+  }
+  function setHidden(next) { state.hidden = next; ls.set('cr.hidden', next); saveHidden(); render(); }
+  function hideShow(id) { const ix = rowIndex.get(id); setHidden({ ...state.hidden, shows: { ...state.hidden.shows, [id]: ix ? showLabel(ix.e) : true } }); toast(`Hidden: ${ix ? showLabel(ix.e) : 'show'}`, () => unhideShow(id)); }
+  function unhideShow(id) { const shows = { ...state.hidden.shows }; delete shows[id]; setHidden({ ...state.hidden, shows }); }
+  function hideArtist(k, name) { setHidden({ ...state.hidden, artists: { ...state.hidden.artists, [k]: name } }); toast(`Not interested in ${name}`, () => unhideArtist(k)); }
+  function unhideArtist(k) { const artists = { ...state.hidden.artists }; delete artists[k]; setHidden({ ...state.hidden, artists }); }
+  function unhide(id) {
+    const ix = rowIndex.get(id);
+    if (state.hidden.shows[id]) return unhideShow(id);
+    if (ix) { const artists = { ...state.hidden.artists }; (ix.e.hits.length ? ix.e.hits.map((h) => h.k) : [ix.target.k]).forEach((k) => delete artists[k]); setHidden({ ...state.hidden, artists }); }
+  }
+  const showLabel = (e) => { const p = parts(e.date); return `${(e.artists && e.artists[0]) || e.name}, ${p.m.charAt(0) + p.m.slice(1).toLowerCase()} ${p.d}`; };
+
+  async function saveHidden() {
+    try {
+      const r = await fetch(helper() + '/hidden', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state.hidden) });
+      if (!r.ok) throw new Error();
+      ls.del('cr.hiddenUnsynced');
+    } catch { ls.set('cr.hiddenUnsynced', true); }
+  }
+  async function loadHidden() {
+    try {
+      const r = await fetch(helper() + '/hidden');
+      if (!r.ok) return;
+      const d = await r.json();
+      const local = state.hidden;
+      if (ls.get('cr.hiddenUnsynced') || (!d.updatedAt && (Object.keys(local.shows).length || Object.keys(local.artists).length))) { await saveHidden(); return; }
+      state.hidden = { shows: d.shows || {}, artists: d.artists || {} }; ls.set('cr.hidden', state.hidden); render();
+    } catch {}
+  }
+
+  // The ⋯ menu.
+  function openMenu(btn, id) {
+    closeMenu();
+    const ix = rowIndex.get(id); if (!ix) return;
+    const e = ix.e;
+    const artist = e.hits[0] ? { k: e.hits[0].k, name: e.hits[0].a.name } : ix.target;
+    const items = e.hiddenWhy
+      ? [`<button role="menuitem" data-act="unhide">Unhide this show</button>`]
+      : [`<button role="menuitem" data-act="hide">Hide this show</button>`,
+         `<button role="menuitem" data-act="artist">Not interested in ${esc(artist.name)}</button>`];
+    const m = document.createElement('div');
+    m.className = 'menu'; m.id = 'menu'; m.setAttribute('role', 'menu');
+    m.innerHTML = items.join('');
+    document.body.append(m);
+    const r = btn.getBoundingClientRect();
+    const w = Math.min(280, window.innerWidth - 32);
+    m.style.width = w + 'px';
+    m.style.left = Math.max(16, Math.min(r.right - w, window.innerWidth - w - 16)) + 'px';
+    const below = r.bottom + 6 + m.offsetHeight < window.innerHeight;
+    m.style.top = (below ? r.bottom + 6 : r.top - m.offsetHeight - 6) + 'px';
+    m.addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-act]'); if (!b) return;
+      closeMenu();
+      if (b.dataset.act === 'hide') hideShow(id);
+      else if (b.dataset.act === 'artist') hideArtist(artist.k, artist.name);
+      else unhide(id);
+    });
+    m.querySelector('button').focus();
+  }
+  function closeMenu() { const m = document.getElementById('menu'); if (m) m.remove(); }
+  document.addEventListener('click', (ev) => { if (!ev.target.closest('#menu') && !ev.target.closest('[data-menu]')) closeMenu(); });
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') closeMenu(); });
+  window.addEventListener('scroll', closeMenu, { passive: true });
+
+  // Little message at the bottom with Undo.
+  let toastTimer = 0;
+  function toast(msg, undo) {
+    let t = document.getElementById('toast');
+    if (!t) { t = document.createElement('div'); t.id = 'toast'; t.setAttribute('role', 'status'); document.body.append(t); }
+    t.innerHTML = `<span>${esc(msg)}</span>${undo ? '<button>Undo</button>' : ''}`;
+    t.className = 'show';
+    if (undo) t.querySelector('button').onclick = () => { t.className = ''; undo(); };
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.className = ''; }, 6000);
+  }
+
+  // Swipe left on a show to hide it (phones).
+  (function swipe() {
+    const box = document.getElementById('sections');
+    let row = null, inner = null, x0 = 0, y0 = 0, dx = 0, mode = '', swallow = false;
+    box.addEventListener('touchstart', (ev) => {
+      if (ev.touches.length !== 1 || ev.target.closest('button')) return;
+      row = ev.target.closest('.show'); if (!row || row.classList.contains('hiddenrow')) { row = null; return; }
+      inner = row.querySelector('.inner'); x0 = ev.touches[0].clientX; y0 = ev.touches[0].clientY; dx = 0; mode = '';
+    }, { passive: true });
+    box.addEventListener('touchmove', (ev) => {
+      if (!row) return;
+      const mx = ev.touches[0].clientX - x0, my = ev.touches[0].clientY - y0;
+      if (!mode) { if (Math.abs(mx) > 10 && Math.abs(mx) > Math.abs(my) * 1.5 && mx < 0) mode = 'swipe'; else if (Math.abs(my) > 10 || mx > 10) { row = null; return; } }
+      if (mode === 'swipe') { ev.preventDefault(); dx = Math.min(0, mx); inner.style.transition = 'none'; inner.style.transform = `translateX(${dx}px)`; row.classList.toggle('armed', dx < -90); }
+    }, { passive: false });
+    box.addEventListener('touchend', () => {
+      if (!row) return;
+      const r = row, i = inner; row = null;
+      if (mode !== 'swipe') return;
+      swallow = true; setTimeout(() => { swallow = false; }, 350);
+      i.style.transition = '';
+      if (dx < -90) { i.style.transform = 'translateX(-100%)'; r.style.opacity = '0.4'; setTimeout(() => hideShow(r.dataset.id), 180); }
+      else { i.style.transform = ''; r.classList.remove('armed'); }
+    });
+    box.addEventListener('click', (ev) => { if (swallow) { ev.preventDefault(); ev.stopPropagation(); } }, true);
+  })();
 
   // Worth the drive: your strongest artists playing within a few hours who aren't coming to your cities.
   function driveSection(upcoming, mine, map, today) {
     if (!state.artists) return '';
     const local = new Set(mine.flatMap((e) => e.hits.map((h) => h.k)));
     const pool = [...upcoming.filter((e) => e.region === 'drive'), ...((state.drive && state.drive.events) || []).filter((e) => e.date >= today)];
-    const shows = dedupe(annotate(pool, map))
+    const shows = markHidden(dedupe(annotate(pool, map))
       .map((e) => ({ ...e, hits: e.hits.filter((h) => strong(h.a) && !local.has(h.k)) }))
-      .filter((e) => e.hits.length)
+      .filter((e) => e.hits.length))
+      .filter((e) => !e.hiddenWhy || state.showHidden)
       .sort((a, b) => a.date.localeCompare(b.date));
     // Up to two dates per artist, so one long tour doesn't fill the section.
     const per = new Map();
@@ -691,7 +845,7 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
   function showSetup(asSettings) {
     state.screen = 'setup';
     $('listView').hidden = true; $('favView').hidden = true; $('setupView').hidden = false; $('refreshBtn').hidden = true; $('favBtn').hidden = !ready();
-    $('historyBox').hidden = !ready(); historyNote();
+    $('historyBox').hidden = !ready(); historyNote(); renderNotInterested();
     $('setupTitle').textContent = asSettings ? 'Settings' : 'Set up Concert Radar';
     $('setupIntro').hidden = asSettings;
     $('helperInput').value = helper();
@@ -744,11 +898,22 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
   $('rescanBtn').addEventListener('click', () => { if (!saveHelper()) return; location.hash = ''; openList(); loadArtists(true); });
   $('doneBtn').addEventListener('click', () => { if (!saveHelper()) return; location.hash = ''; openList(); });
   $('gearBtn').addEventListener('click', () => showSetup(true));
+  function renderNotInterested() {
+    const list = Object.entries(state.hidden.artists).sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+    $('notInterestedBox').hidden = !list.length;
+    $('notInterestedList').innerHTML = list.map(([k, name]) => `<div class="favrow"><div class="nm"><b>${esc(name === true ? k : name)}</b></div><button class="rm" data-unart="${esc(k)}" aria-label="Show ${esc(name)} again">✕</button></div>`).join('');
+  }
+  $('notInterestedList').addEventListener('click', (ev) => { const b = ev.target.closest('[data-unart]'); if (b) { unhideArtist(b.dataset.unart); renderNotInterested(); } });
 
   // ---------- list controls ----------
   $('segMine').addEventListener('click', () => { state.view = 'mine'; ls.set(K.view, 'mine'); render(); });
   $('segAll').addEventListener('click', () => { state.view = 'all'; ls.set(K.view, 'all'); render(); });
   $('sections').addEventListener('click', (ev) => {
+    const mb = ev.target.closest('[data-menu]');
+    if (mb) { ev.preventDefault(); openMenu(mb, mb.dataset.menu); return; }
+    const uh = ev.target.closest('[data-unhide]');
+    if (uh) { ev.preventDefault(); unhide(uh.dataset.unhide); return; }
+    if (ev.target.closest('#hiddenToggle')) { state.showHidden = !state.showHidden; render(); return; }
     const nt = ev.target.closest('[data-notitle]');
     if (nt) { ev.preventDefault(); ev.stopPropagation(); state.noTitle = { ...state.noTitle, [nt.dataset.notitle]: nt.dataset.name }; ls.set('cr.noTitle', state.noTitle); render(); return; }
     const f = ev.target.closest('[data-fav]');
@@ -765,6 +930,7 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
     loadShows(false);
     loadArtists(false);
     loadFavs();
+    loadHidden();
     loadHistory();
   }
 

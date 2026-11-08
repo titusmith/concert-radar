@@ -5,6 +5,7 @@
 //   GET /events?...      Passes a Ticketmaster event search through, adding your key. Only event searches are allowed.
 //   GET /venue?id=...    Reads one venue's calendar (from the list below) and returns its shows.
 //   GET/POST /favorites  Your Favorites list, so phone and computer share it.
+//   GET/POST /hidden     Shows you've hidden and artists you're not interested in.
 //   GET/POST /history    Play counts per artist from your Spotify listening-history file.
 //   GET /health          Quick check that the key and storage are set up.
 //
@@ -55,30 +56,34 @@ export default {
       return json({ ok: true, ticketmasterKey: !!env.TICKETMASTER_KEY, storage: !!env.CR, storageSince, venues: Object.keys(VENUES) }, 200, cors);
     }
 
-    // Small saved things: your Favorites and your listening-history summary.
-    if (url.pathname === '/favorites' || url.pathname === '/history') {
+    // Small saved things: your Favorites, shows and artists you've hidden, and your listening-history summary.
+    if (url.pathname === '/favorites' || url.pathname === '/history' || url.pathname === '/hidden') {
       if (!env.CR) return json({ error: 'no_storage', message: 'The helper has no storage yet.' }, 500, cors);
       const key = url.pathname.slice(1);
       if (req.method === 'GET') {
         const v = await env.CR.get(key, 'json');
-        return json(v || (key === 'favorites' ? { artists: [], updatedAt: null } : { artists: {}, updatedAt: null }), 200, cors);
+        return json(v || (key === 'favorites' ? { artists: [], updatedAt: null } : key === 'hidden' ? { shows: {}, artists: {}, updatedAt: null } : { artists: {}, updatedAt: null }), 200, cors);
       }
       if (req.method === 'POST') {
         // Only from the app itself (a browser always sends Origin on POST).
         if (!APP_ORIGINS.includes(origin)) return json({ error: 'not_allowed' }, 403, cors);
         const body = await req.text();
-        if (body.length > (key === 'favorites' ? 100000 : 5000000)) return json({ error: 'too_big' }, 413, cors);
+        if (body.length > (key === 'history' ? 5000000 : 300000)) return json({ error: 'too_big' }, 413, cors);
         let data;
         try { data = JSON.parse(body); } catch { return json({ error: 'bad_json' }, 400, cors); }
         if (key === 'favorites') {
           if (!Array.isArray(data.artists)) return json({ error: 'bad_list' }, 400, cors);
           data = { artists: data.artists.slice(0, 1000).map((a) => ({ name: String(a.name || '').slice(0, 120), id: a.id ? String(a.id).slice(0, 40) : undefined })).filter((a) => a.name), updatedAt: new Date().toISOString() };
+        } else if (key === 'hidden') {
+          const obj = (o) => (o && typeof o === 'object' && !Array.isArray(o) ? o : {});
+          const trim = (o) => Object.fromEntries(Object.entries(obj(o)).slice(-3000).map(([k, v]) => [String(k).slice(0, 200), typeof v === 'string' ? v.slice(0, 200) : true]));
+          data = { shows: trim(data.shows), artists: trim(data.artists), updatedAt: new Date().toISOString() };
         } else {
           if (!data.artists || typeof data.artists !== 'object') return json({ error: 'bad_history' }, 400, cors);
           data = { artists: data.artists, from: data.from || null, to: data.to || null, updatedAt: new Date().toISOString() };
         }
         await env.CR.put(key, JSON.stringify(data));
-        return json(key === 'favorites' ? data : { ok: true, updatedAt: data.updatedAt, count: Object.keys(data.artists).length }, 200, cors);
+        return json(key !== 'history' ? data : { ok: true, updatedAt: data.updatedAt, count: Object.keys(data.artists).length }, 200, cors);
       }
     }
 
