@@ -6,6 +6,8 @@
 //   GET /venue?id=...    Reads one venue's calendar (from the list below) and returns its shows.
 //   GET/POST /favorites  Your Favorites list, so phone and computer share it.
 //   GET/POST /hidden     Shows you've hidden and artists you're not interested in.
+//   GET/POST /going      Shows you have tickets for (past ones become "Seen live").
+//   GET /ics?...         A calendar file for one show, so "Add to calendar" opens your phone's calendar.
 //   GET/POST /history    Play counts per artist from your Spotify listening-history file.
 //   GET /health          Quick check that the key and storage are set up.
 //
@@ -57,12 +59,14 @@ export default {
     }
 
     // Small saved things: your Favorites, shows and artists you've hidden, and your listening-history summary.
-    if (url.pathname === '/favorites' || url.pathname === '/history' || url.pathname === '/hidden') {
+    if (url.pathname === '/ics' && req.method === 'GET') return ics(url);
+
+    if (url.pathname === '/favorites' || url.pathname === '/history' || url.pathname === '/hidden' || url.pathname === '/going') {
       if (!env.CR) return json({ error: 'no_storage', message: 'The helper has no storage yet.' }, 500, cors);
       const key = url.pathname.slice(1);
       if (req.method === 'GET') {
         const v = await env.CR.get(key, 'json');
-        return json(v || (key === 'favorites' ? { artists: [], updatedAt: null } : key === 'hidden' ? { shows: {}, artists: {}, updatedAt: null } : { artists: {}, updatedAt: null }), 200, cors);
+        return json(v || (key === 'favorites' ? { artists: [], updatedAt: null } : key === 'hidden' ? { shows: {}, artists: {}, updatedAt: null } : key === 'going' ? { shows: {}, updatedAt: null } : { artists: {}, updatedAt: null }), 200, cors);
       }
       if (req.method === 'POST') {
         // Only from the app itself (a browser always sends Origin on POST).
@@ -74,6 +78,18 @@ export default {
         if (key === 'favorites') {
           if (!Array.isArray(data.artists)) return json({ error: 'bad_list' }, 400, cors);
           data = { artists: data.artists.slice(0, 1000).map((a) => ({ name: String(a.name || '').slice(0, 120), id: a.id ? String(a.id).slice(0, 40) : undefined })).filter((a) => a.name), updatedAt: new Date().toISOString() };
+        } else if (key === 'going') {
+          const str = (v, n) => (v == null ? '' : String(v).slice(0, n));
+          const shows = {};
+          for (const [id, e] of Object.entries(data.shows && typeof data.shows === 'object' ? data.shows : {}).slice(-2000)) {
+            if (!e || !/^\d{4}-\d{2}-\d{2}$/.test(e.date || '')) continue;
+            shows[str(id, 200)] = {
+              id: str(id, 200), name: str(e.name, 200), date: e.date, time: str(e.time, 5), venue: str(e.venue, 120), city: str(e.city, 80),
+              state: str(e.state, 4), url: str(e.url, 500), artists: (Array.isArray(e.artists) ? e.artists : []).slice(0, 12).map((a) => str(a, 120)),
+              keys: (Array.isArray(e.keys) ? e.keys : []).slice(0, 12).map((a) => str(a, 120)), added: str(e.added, 30)
+            };
+          }
+          data = { shows, updatedAt: new Date().toISOString() };
         } else if (key === 'hidden') {
           const obj = (o) => (o && typeof o === 'object' && !Array.isArray(o) ? o : {});
           const trim = (o) => Object.fromEntries(Object.entries(obj(o)).slice(-3000).map(([k, v]) => [String(k).slice(0, 200), typeof v === 'string' ? v.slice(0, 200) : true]));
@@ -120,6 +136,38 @@ export default {
     return json({ error: 'not_found' }, 404, cors);
   }
 };
+
+// One show as a calendar file. Times are local to the venue (Central), written without a time zone so the
+// calendar takes them as-is. No time listed: an all-day event.
+function ics(url) {
+  const q = (k, n) => (url.searchParams.get(k) || '').slice(0, n);
+  const esc = (s) => s.replace(/\\/g, '\\\\').replace(/([,;])/g, '\\$1').replace(/\r?\n/g, '\\n');
+  const d = q('d', 10), h = q('h', 5);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return new Response('bad date', { status: 400 });
+  const ymd = d.replace(/-/g, '');
+  let when;
+  if (/^\d{2}:\d{2}$/.test(h)) {
+    const start = new Date(`${d}T${h}:00Z`), end = new Date(start.getTime() + 3 * 3600000);
+    const f = (t) => t.toISOString().slice(0, 16).replace(/[-:]/g, '') + '00';
+    when = [`DTSTART:${f(start)}`, `DTEND:${f(end)}`];
+  } else {
+    const next = new Date(`${d}T00:00:00Z`); next.setUTCDate(next.getUTCDate() + 1);
+    when = [`DTSTART;VALUE=DATE:${ymd}`, `DTEND;VALUE=DATE:${next.toISOString().slice(0, 10).replace(/-/g, '')}`];
+  }
+  const body = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Concert Radar//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    `UID:${ymd}-${crypto.randomUUID()}@concert-radar`,
+    `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}Z`,
+    ...when,
+    `SUMMARY:${esc(q('t', 200) || 'Concert')}`,
+    q('loc', 200) ? `LOCATION:${esc(q('loc', 200))}` : '',
+    q('u', 500) ? `URL:${q('u', 500).replace(/[\r\n]/g, '')}` : '',
+    q('u', 500) ? `DESCRIPTION:${esc('Tickets: ' + q('u', 500))}` : '',
+    'END:VEVENT', 'END:VCALENDAR', ''
+  ].filter((l) => l !== '').join('\r\n') + '\r\n';
+  return new Response(body, { headers: { 'Content-Type': 'text/calendar; charset=utf-8', 'Content-Disposition': `attachment; filename="concert-${ymd}.ics"`, 'Cache-Control': 'no-store' } });
+}
 
 function json(data, status, headers) {
   return new Response(JSON.stringify(data), { status, headers: { ...headers, 'Content-Type': 'application/json' } });
