@@ -77,6 +77,20 @@ section{margin-top:22px}
 #toast span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #toast button{min-height:36px;border:none;background:transparent;color:var(--pink-ink);font-weight:600;padding:0 10px;border-radius:8px;background:var(--pink)}
 .hidetoggle{margin-top:22px}
+.yours{margin:0 0 18px}
+.yours .city{position:static;padding-top:0}
+.ycard{display:flex;align-items:center;gap:4px;border-bottom:1px solid var(--line)}
+.ycard:last-of-type{border-bottom:none}
+.ylink{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;padding:12px 0;text-decoration:none}
+.ylink:active{background:var(--surface)}
+.when{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--pink)}
+.ywho{font-size:17px;font-weight:600;line-height:1.25}
+.ywho .also{font-weight:400;color:var(--muted);font-size:14px}
+.ywhere{font-size:13px;color:var(--muted)}
+.ycard.past .when{color:var(--faint)}
+.ycard.past .ywho{font-size:15px;font-weight:500;color:#C9CACD}
+.pastbtn{margin-top:8px;min-height:40px;padding:0;border:none;background:transparent;color:var(--muted);font-size:13px;text-decoration:underline;text-underline-offset:3px}
+.menu button.going{color:var(--fg);font-weight:600}
 .show .link{flex:1;min-width:0;display:flex;gap:14px;padding:14px 0;text-decoration:none;align-items:flex-start}
 .show .link:active{background:var(--surface)}
 .star{width:44px;height:40px;flex:none;border:none;background:transparent;border-radius:999px;color:var(--faint);font-size:20px;line-height:1;display:flex;align-items:center;justify-content:center}
@@ -164,6 +178,7 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
 
   <!-- the list -->
   <main id="listView" hidden>
+    <section id="yours" class="yours" hidden aria-label="Your shows"></section>
     <div class="seg" role="group" aria-label="Which shows">
       <button id="segMine" aria-pressed="true">Your artists<span class="n" id="nMine"></span></button>
       <button id="segAll" aria-pressed="false">Everything<span class="n" id="nAll"></span></button>
@@ -269,7 +284,9 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
     favs: ls.get(K.favs) || {},
     noTitle: ls.get('cr.noTitle') || {},
     hidden: ls.get('cr.hidden') || { shows: {}, artists: {} },  // shows you've hidden (by id) and artists you're not interested in
-    showHidden: false,   // artists you've said "Not them" to inside show titles            // artists you've tagged Favorite: { normName: displayName }
+    showHidden: false,
+    going: ls.get('cr.going') || {},       // shows you have tickets for: { id: snapshot of the show }
+    showPast: false,   // artists you've said "Not them" to inside show titles            // artists you've tagged Favorite: { normName: displayName }
     drive: ls.get(K.drive),                // road-trip shows for your strongest artists
     history: ls.get(K.history),            // { artists: { normName: { name, plays } } } from your Spotify history file
     screen: 'list',
@@ -304,6 +321,7 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
   function reasons(a) {
     const out = [];
     if (a.fav) out.push({ t: 'Favorite', fav: true });
+    if (a.seen) out.push({ t: a.seen === 1 ? 'Seen live' : `Seen live ${a.seen}×`, strong: true });
     if (a.top) out.push({ t: 'Top artist', strong: true });
     if (a.follow) out.push({ t: 'Following', strong: true });
     if (a.liked) out.push({ t: a.liked === 1 ? 'Liked 1 song' : `Liked ${a.liked} songs`, strong: a.liked >= 5 });
@@ -313,9 +331,9 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
     if (a.albums && out.length < 2) out.push({ t: a.albums === 1 ? 'Saved album' : `${a.albums} saved albums`, strong: a.albums >= 2 });
     if (a.recent && out.length < 2) out.push({ t: 'Played recently', strong: false });
     if (a.plays && a.plays < 10 && out.length < 1) out.push({ t: a.plays === 1 ? 'Played once' : `Played ${a.plays} times`, strong: false });
-    return out.slice(0, a.fav ? 3 : 2);
+    return out.slice(0, (a.fav ? 1 : 0) + (a.seen ? 1 : 0) + 2);
   }
-  const weight = (a) => (a.fav ? 200 : 0) + Math.min(a.plays || 0, 300) / 3 + Math.min(a.playlists || 0, 30) + (a.albums || 0) * 10 + (a.top ? 100 : 0) + (a.follow ? 60 : 0) + Math.min(a.liked, 50) * 2 + (a.rotation ? 20 : 0) + (a.recent ? 5 : 0);
+  const weight = (a) => (a.fav ? 200 : 0) + (a.seen ? 40 : 0) + Math.min(a.plays || 0, 300) / 3 + Math.min(a.playlists || 0, 30) + (a.albums || 0) * 10 + (a.top ? 100 : 0) + (a.follow ? 60 : 0) + Math.min(a.liked, 50) * 2 + (a.rotation ? 20 : 0) + (a.recent ? 5 : 0);
 
   // Strong enough to drive for: tagged Favorite, a top artist, one you follow, or 10+ liked songs.
   const strong = (a) => a.fav || a.top || a.follow || a.liked >= 10 || a.plays >= 100 || a.albums >= 2 || a.playlists >= 10;
@@ -324,13 +342,20 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
   const blank = (name) => ({ name, top: false, rotation: false, follow: false, liked: 0, recent: 0, albums: 0, playlists: 0, plays: 0 });
   let mapCache = null;
   function artistMap() {
-    const src = [state.artists, state.favs, state.history];
+    const src = [state.artists, state.favs, state.history, state.going];
     if (mapCache && mapCache.src.every((x, i) => x === src[i])) return mapCache.map;
     const map = { ...((state.artists && state.artists.artists) || {}) };
     for (const [k, h] of Object.entries((state.history && state.history.artists) || {})) {
       map[k] = { ...(map[k] || blank(h.name)), plays: h.plays };
     }
     for (const [k, name] of Object.entries(state.favs)) map[k] = { ...(map[k] || blank(name)), fav: true };
+    // Seen live: artists on shows you had tickets for that are now in the past.
+    const today = todayISO();
+    for (const g of Object.values(state.going)) {
+      if (g.date >= today) continue;
+      const keys = new Set([...(g.keys || []), ...(g.artists || []).map(SPOT.norm)].filter(Boolean));
+      for (const k of keys) { const a = map[k] || blank((g.artists || []).find((n) => SPOT.norm(n) === k) || k); map[k] = { ...a, seen: (a.seen || 0) + 1 }; }
+    }
     mapCache = { src, map };
     return map;
   }
@@ -458,7 +483,8 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
     const map = artistMap();
     const upcoming = (data.events || []).filter((e) => e.date >= today);
     rowIndex.clear();
-    const allWithHidden = markHidden(dedupe(annotate(upcoming.filter((e) => e.region !== 'drive'), map)));
+    const allWithHidden = markHidden(dedupe(annotate(upcoming.filter((e) => e.region !== 'drive' && !state.going[e.id]), map)));
+    renderYours(today);
     const mineWithHidden = allWithHidden.filter((e) => e.hits.length);
     const vis = (e) => !e.hiddenWhy || state.showHidden;
     const all = allWithHidden.filter(vis);
@@ -542,6 +568,101 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
     } catch {}
   }
 
+  // ---------- Got tickets ----------
+  function snapshot(e) {
+    return { id: e.id, name: e.name, date: e.date, time: e.time || '', venue: e.venue || '', city: e.city || '', state: e.state || '',
+      url: e.url || '', artists: (e.artists && e.artists.length ? e.artists : [e.name]).slice(0, 12), keys: (e.hits || []).map((h) => h.k), added: new Date().toISOString() };
+  }
+  function setGoing(next) { state.going = next; ls.set('cr.going', next); saveGoing(); render(); }
+  function markGoing(e) {
+    setGoing({ ...state.going, [e.id]: snapshot(e) });
+    toast(`Got tickets: ${showLabel(e)}`, () => unmarkGoing(e.id));
+  }
+  function unmarkGoing(id) { const next = { ...state.going }; delete next[id]; setGoing(next); }
+  async function saveGoing() {
+    try {
+      const r = await fetch(helper() + '/going', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shows: state.going }) });
+      if (!r.ok) throw new Error();
+      ls.del('cr.goingUnsynced');
+    } catch { ls.set('cr.goingUnsynced', true); }
+  }
+  async function loadGoing() {
+    try {
+      const r = await fetch(helper() + '/going');
+      if (!r.ok) return;
+      const d = await r.json();
+      if (ls.get('cr.goingUnsynced') || (!d.updatedAt && Object.keys(state.going).length)) { await saveGoing(); return; }
+      state.going = d.shows || {}; ls.set('cr.going', state.going); render();
+    } catch {}
+  }
+  function calendarUrl(g) {
+    const who = (g.artists && g.artists.length ? g.artists.slice(0, 3).join(', ') : g.name);
+    const q = new URLSearchParams({ t: who, d: g.date, h: g.time || '', loc: [g.venue, g.city].filter(Boolean).join(', '), u: g.url || '' });
+    return helper() + '/ics?' + q;
+  }
+  function untilText(iso, today) {
+    const [y, m, d] = iso.split('-').map(Number), [ty, tm, td] = today.split('-').map(Number);
+    const days = Math.round((Date.UTC(y, m - 1, d) - Date.UTC(ty, tm - 1, td)) / 86400000);
+    return days === 0 ? 'Tonight' : days === 1 ? 'Tomorrow' : days < 7 ? 'This ' + parts(iso).w : days < 14 ? 'Next week' : `In ${days < 60 ? Math.round(days / 7) + ' weeks' : Math.round(days / 30) + ' months'}`;
+  }
+  function renderYours(today) {
+    const all = Object.values(state.going).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+    const next = all.filter((g) => g.date >= today);
+    const past = all.filter((g) => g.date < today).reverse();
+    const box = $('yours');
+    box.hidden = !all.length;
+    if (!all.length) return;
+    const card = (g, isPast) => {
+      const p = parts(g.date);
+      const who = (g.artists && g.artists[0]) || g.name;
+      const more = g.artists && g.artists.length > 1 ? ` <span class="also">+${g.artists.length - 1}</span>` : '';
+      return `<div class="ycard${isPast ? ' past' : ''}">
+        <a class="ylink" href="${esc(g.url)}" target="_blank" rel="noopener">
+          <span class="when">${isPast ? `${p.m} ${p.d}${p.y !== new Date().getFullYear() ? ` '${String(p.y).slice(2)}` : ''}` : esc(untilText(g.date, today))}</span>
+          <span class="ywho">${esc(who)}${more}</span>
+          <span class="ywhere">${isPast ? esc(g.venue) : `${p.w} ${p.m.charAt(0) + p.m.slice(1).toLowerCase()} ${p.d}${g.time ? ' · ' + clock(g.time) : ''} · ${esc(g.venue)}`}</span>
+        </a>
+        <button class="more-btn" data-gmenu="${esc(g.id)}" aria-label="More for ${esc(who)}" aria-haspopup="menu">⋯</button>
+      </div>`;
+    };
+    box.innerHTML = `<div class="city"><h2>Your shows</h2><span class="count">${next.length ? next.length + ' coming up' : 'Nothing booked'}</span></div>
+      ${next.map((g) => card(g, false)).join('') || '<p class="none">No tickets for upcoming shows. Use ⋯ → Got tickets on any show.</p>'}
+      ${past.length ? `<button class="pastbtn" id="pastToggle" aria-expanded="${state.showPast}">${state.showPast ? 'Hide' : 'Show'} shows you've been to (${past.length})</button>${state.showPast ? past.map((g) => card(g, true)).join('') : ''}` : ''}`;
+  }
+  function openGoingMenu(btn, id) {
+    closeMenu();
+    const g = state.going[id]; if (!g) return;
+    const isPast = g.date < todayISO();
+    const items = [
+      !isPast ? `<button role="menuitem" data-act="cal">Add to calendar</button>` : '',
+      g.url ? `<button role="menuitem" data-act="open">Open tickets page</button>` : '',
+      `<button role="menuitem" data-act="ungo">${isPast ? 'Remove from shows I\'ve been to' : 'Not going after all'}</button>`
+    ].filter(Boolean);
+    const m = document.createElement('div');
+    m.className = 'menu'; m.id = 'menu'; m.setAttribute('role', 'menu');
+    m.innerHTML = items.join('');
+    document.body.append(m);
+    const r = btn.getBoundingClientRect();
+    const w = Math.min(280, window.innerWidth - 32);
+    m.style.width = w + 'px';
+    m.style.left = Math.max(16, Math.min(r.right - w, window.innerWidth - w - 16)) + 'px';
+    const below = r.bottom + 6 + m.offsetHeight < window.innerHeight;
+    m.style.top = (below ? r.bottom + 6 : r.top - m.offsetHeight - 6) + 'px';
+    m.addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-act]'); if (!b) return;
+      closeMenu();
+      if (b.dataset.act === 'cal') window.open(calendarUrl(g), '_blank');
+      else if (b.dataset.act === 'open') window.open(g.url, '_blank', 'noopener');
+      else if (b.dataset.act === 'ungo') { unmarkGoing(id); toast(isPast ? 'Removed' : 'Removed from your shows', () => setGoing({ ...state.going, [id]: g })); }
+    });
+    m.querySelector('button').focus();
+  }
+  $('yours').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-gmenu]');
+    if (b) { ev.preventDefault(); openGoingMenu(b, b.dataset.gmenu); return; }
+    if (ev.target.closest('#pastToggle')) { state.showPast = !state.showPast; render(); }
+  });
+
   // The ⋯ menu.
   function openMenu(btn, id) {
     closeMenu();
@@ -553,7 +674,8 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
       : ((e.artists && e.artists.length ? e.artists : [e.name]).slice(0, 5).map((n) => ({ k: SPOT.norm(n), name: n })));
     const items = e.hiddenWhy
       ? [`<button role="menuitem" data-act="unhide">Unhide this show</button>`]
-      : [`<button role="menuitem" data-act="hide">Hide this show</button>`,
+      : [`<button role="menuitem" data-act="going" class="going">🎟 Got tickets</button>`,
+         `<button role="menuitem" data-act="hide">Hide this show</button>`,
          ...people.slice(0, 6).map((a, i) => `<button role="menuitem" data-act="artist" data-i="${i}">Not interested in ${esc(a.name)}</button>`),
          ...(people.length > 1 ? [`<button role="menuitem" data-act="all">Not interested in any of them</button>`] : [])];
     const m = document.createElement('div');
@@ -569,7 +691,8 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
     m.addEventListener('click', (ev) => {
       const b = ev.target.closest('[data-act]'); if (!b) return;
       closeMenu();
-      if (b.dataset.act === 'hide') hideShow(id);
+      if (b.dataset.act === 'going') markGoing(e);
+      else if (b.dataset.act === 'hide') hideShow(id);
       else if (b.dataset.act === 'artist') { const a = people[+b.dataset.i]; hideArtist(a.k, a.name); }
       else if (b.dataset.act === 'all') hideArtists(people);
       else unhide(id);
@@ -577,7 +700,7 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
     m.querySelector('button').focus();
   }
   function closeMenu() { const m = document.getElementById('menu'); if (m) m.remove(); }
-  document.addEventListener('click', (ev) => { if (!ev.target.closest('#menu') && !ev.target.closest('[data-menu]')) closeMenu(); });
+  document.addEventListener('click', (ev) => { if (!ev.target.closest('#menu') && !ev.target.closest('[data-menu]') && !ev.target.closest('[data-gmenu]')) closeMenu(); });
   document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') closeMenu(); });
   window.addEventListener('scroll', closeMenu, { passive: true });
 
@@ -623,7 +746,7 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
   function driveSection(upcoming, mine, map, today) {
     if (!state.artists) return '';
     const local = new Set(mine.flatMap((e) => e.hits.map((h) => h.k)));
-    const pool = [...upcoming.filter((e) => e.region === 'drive'), ...((state.drive && state.drive.events) || []).filter((e) => e.date >= today)];
+    const pool = [...upcoming.filter((e) => e.region === 'drive'), ...((state.drive && state.drive.events) || []).filter((e) => e.date >= today)].filter((e) => !state.going[e.id]);
     const shows = markHidden(dedupe(annotate(pool, map))
       .map((e) => ({ ...e, hits: e.hits.filter((h) => strong(h.a) && !local.has(h.k)) }))
       .filter((e) => e.hits.length))
@@ -945,6 +1068,7 @@ input[type=text],input[type=url]{min-height:46px;border-radius:10px;border:1px s
     loadArtists(false);
     loadFavs();
     loadHidden();
+    loadGoing();
     loadHistory();
   }
 
