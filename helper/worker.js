@@ -33,7 +33,9 @@ const VENUES = {
   truman:     { name: 'The Truman', city: 'Kansas City', kind: 'aeg', url: 'https://www.thetrumankc.com/events/all' },
   recordbar:  { name: 'recordBar', city: 'Kansas City', kind: 'recordbar', url: 'https://www.therecordbar.com/shows' },
   wob:        { name: 'Warehouse on Broadway', city: 'Kansas City', kind: 'wob', url: 'https://www.warehouseonbroadway.com/events' },
-  cotillion:  { name: 'The Cotillion', city: 'Wichita', kind: 'rhp', url: 'https://thecotillion.com/events/' }
+  cotillion:  { name: 'The Cotillion', city: 'Wichita', kind: 'rhp', url: 'https://thecotillion.com/events/' },
+  // LAAND (Lawrence All-Ages Noise Destination) books shows at several rooms (White Schoolhouse, Liberty Hall…).
+  laand:      { name: 'LAAND', city: 'Lawrence', kind: 'squarespace', url: 'https://www.laand.org/shows' }
 };
 
 export default {
@@ -192,6 +194,7 @@ async function readVenue(v) {
     }
     return out;
   }
+  if (v.kind === 'squarespace') return parseSquarespace(await get(v.url + '?format=json', 'json'), v.url);
   const html = await get(v.url, 'html');
   if (v.kind === 'aeg') return parseAeg(html);
   if (v.kind === 'recordbar') return parseRecordbar(html, v.url);
@@ -331,6 +334,40 @@ function parseWob(html, base) {
       status: ''
     };
   }).filter((e) => e.name && e.date);
+}
+
+// Squarespace event pages (?format=json). Titles look like "Porcelain at White Schoolhouse";
+// the openers are in the write-up ("Support from ZASTAVA (Detroit) and NIGHTOSPHERE (KCMO).").
+const TICKET_HOSTS = /(eventbrite|ticketmaster|etix|dice\.fm|axs|tixr|seetickets|ticketweb|prekindle|holdmyticket|freshtix|showclix|ticketsauce|universe)\./i;
+function centralParts(ms) {
+  const f = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  const p = Object.fromEntries(f.formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
+  return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}` };
+}
+function parseSquarespace(d, base) {
+  const origin = new URL(base).origin;
+  return (d.upcoming || d.items || []).map((i) => {
+    const title = decode(i.title || '');
+    const venue = decode((i.location && i.location.addressTitle) || '');
+    const head = cleanTitle(title.replace(/\s+(?:at|@)\s+(?:the\s+)?[^,]+$/i, (m) => (venue && m.toLowerCase().includes(venue.toLowerCase().replace(/^the /, '').split(' ')[0]) ? '' : m)));
+    const body = text(i.body || '').replace(/#block-[\s\S]*$/, '');
+    const sup = one(body, /(?:with support from|support from|supported by|with special guests?|with)\s+([^.]+?)(?:\.|\n|$)/i)
+      .replace(/\([^)]*\)/g, '')
+      .split(/\s*,\s*(?:and\s+)?|\s+and\s+/i).map((x) => x.trim()).filter((x) => x && x.length < 50 && !/^(former|tickets?|doors)/i.test(x)).slice(0, 6);
+    const tix = [...String(i.body || '').matchAll(/href="([^"]+)"/g)].map((m) => decode(m[1])).find((h) => TICKET_HOSTS.test(h));
+    const when = i.startDate ? centralParts(i.startDate) : { date: '', time: '' };
+    return {
+      id: 'sq-' + (i.id || i.urlId || i.fullUrl),
+      name: head,
+      artists: [head, ...sup].filter(Boolean),
+      date: when.date,
+      time: when.time,
+      venue,
+      city: decode((i.location && i.location.addressLine2) || '').split(',')[0].trim(),
+      url: tix || (i.fullUrl ? origin + i.fullUrl : base),
+      status: status(title)
+    };
+  }).filter((e) => e.name && e.date && e.status !== 'cancelled');
 }
 
 // RHP Events (Rockhouse/eTix's WordPress calendar), used by many eTix venues.

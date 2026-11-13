@@ -17,7 +17,8 @@
     { id: 'truman', name: 'The Truman', city: 'Kansas City', region: 'kc' },
     { id: 'recordbar', name: 'recordBar', city: 'Kansas City', region: 'kc' },
     { id: 'wob', name: 'Warehouse on Broadway', city: 'Kansas City', region: 'kc' },
-    { id: 'cotillion', name: 'The Cotillion', city: 'Wichita', region: 'drive', miles: 160, state: 'KS' }
+    { id: 'cotillion', name: 'The Cotillion', city: 'Wichita', region: 'drive', miles: 160, state: 'KS' },
+    { id: 'laand', name: 'LAAND', city: 'Lawrence', region: 'lawrence' }
   ];
   const MONTHS_AHEAD = 12;
   const WINDOWS = 4;        // the year in 3-month chunks (Ticketmaster stops paging at 1,000 results per search)
@@ -99,7 +100,7 @@
       sources[v.id] = error ? { name: v.name, error } : { name: v.name, count: events.length };
       for (const e of events) {
         if (!e.date || NOT_A_SHOW.test(e.name)) continue;
-        venueEvents.push({ ...e, id: v.id + ':' + e.id, source: v.id, venue: v.name, city: v.city, region: v.region, miles: v.miles || null, state: v.state || '', lat: null, lon: null, onsale: null });
+        venueEvents.push({ ...e, id: v.id + ':' + e.id, source: v.id, venue: e.venue || v.name, city: e.city || v.city, region: v.region, miles: v.miles || null, state: v.state || '', lat: null, lon: null, onsale: null });
       }
     }
     if (Object.values(sources).some((s) => s.error)) partial = true;
